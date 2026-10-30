@@ -1,0 +1,5 @@
+name = "tuctacmerch"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"
+# Bind a D1 database as DB in Cloudflare Pages settings before production.
+# Set PHONE_HASH_SECRET as a secret; use a random, stable value of at least 32 characters.
