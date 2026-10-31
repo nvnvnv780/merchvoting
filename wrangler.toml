@@ -1,5 +1,10 @@
 name = "votemerchtuctac"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
-# Bind a D1 database as DB in Cloudflare Pages settings before production.
 # Set PHONE_HASH_SECRET as a secret; use a random, stable value of at least 32 characters.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "merch-voting"
+database_id = "540f38b7-0816-4cea-9996-befc4bb5119f"
+migrations_dir = "migrations"
