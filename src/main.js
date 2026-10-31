@@ -10,12 +10,13 @@ import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/montserrat/latin-800.css';
 import './style.css';
 import { normalizePhone } from './phone.js';
-import { merchImages, maxMerchCount } from './catalog.js';
+import { merchImages, maxMerchCount, campaignId } from './catalog.js';
 import { sortMerch } from './sort.js';
 const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
 let phone = read('tuctac-phone', '');
-let demoVotes = read('tuctac-demo-votes', {});
+const demoVotesKey = `tuctac-demo-votes-${campaignId}`;
+let demoVotes = read(demoVotesKey, {});
 let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, pending = null, busy = false;
 let photos = [...merchImages];
 let sortOrder = 'default';
@@ -33,7 +34,19 @@ app.innerHTML = `
 <dialog id="phone-dialog" aria-label="Số điện thoại bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Số điện thoại</label><input id="phone" type="tel" autocomplete="tel" placeholder="Nhập số điện thoại" required maxlength="20" aria-describedby="phone-error"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Xác nhận & bình chọn</button><button type="button" class="forget">Quên số trên thiết bị này</button></form></dialog><div id="toast" role="status"></div>`;
 const dialog = document.querySelector('dialog');
 const format = n => new Intl.NumberFormat('vi-VN').format(n);
-function imageMarkup(id) { const image = photo || photos[id - 1]; return image ? `<img src="${image}" alt="Merch ${id}" loading="lazy">` : '<span class="image-empty" aria-label="Chờ ảnh merch gốc">＋</span>'; }
+const imageUrls = new Map();
+function displayImage(image) {
+ if (!image?.startsWith('data:image/') || !URL.createObjectURL) return image;
+ if (!imageUrls.has(image)) {
+  const comma = image.indexOf(',');
+  const type = image.slice(5, image.indexOf(';'));
+  const bytes = Uint8Array.from(atob(image.slice(comma + 1)), char => char.charCodeAt(0));
+  imageUrls.set(image, URL.createObjectURL(new Blob([bytes], {type})));
+ }
+ return imageUrls.get(image);
+}
+window.addEventListener('pagehide', e => { if (!e.persisted) { imageUrls.forEach(url=>URL.revokeObjectURL(url));imageUrls.clear(); } });
+function imageMarkup(id) { const image = photo || photos[id - 1]; return image ? `<img src="${displayImage(image)}" alt="Merch ${id}" loading="lazy" decoding="async" width="1500" height="1500">` : '<span class="image-empty" aria-label="Chờ ảnh merch gốc">＋</span>'; }
 function button(id) { return `<button class="vote ${voted.includes(id) ? 'done' : ''}" data-vote="${id}" ${!ready || busy || voted.includes(id) ? 'disabled' : ''}>${voted.includes(id) ? '✓ Đã bình chọn' : '♡ Bình chọn ngay'}</button>`; }
 function render() {
  const ranked = sortMerch(counts.map((count, i) => ({ id: i + 1, count })), 'desc');
@@ -59,7 +72,7 @@ async function vote(id) {
  busy=true; render();
  try {
   let duplicate=false;
-  if(demo) { const ids=demoVotes[phone] || []; duplicate=ids.includes(id); if(!duplicate) { demoVotes[phone]=[...ids,id]; save('tuctac-demo-votes',demoVotes); } }
+  if(demo) { const ids=demoVotes[phone] || []; duplicate=ids.includes(id); if(!duplicate) { demoVotes[phone]=[...ids,id]; save(demoVotesKey,demoVotes); } }
   else duplicate=(await api({phone,id})).duplicate;
   await refresh(); toast(duplicate ? 'Số điện thoại này đã bình chọn merch này rồi nhé!' : 'Đã gửi một phiếu yêu thương. Cảm ơn bạn! ♡');
  } catch { toast('Chưa gửi được phiếu. Bạn thử lại sau nhé.'); }

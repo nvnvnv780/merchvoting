@@ -1,29 +1,33 @@
 # Túc Tắc · Merch comeback
 
-## Local sample
+## Develop
 
-Node 22+ recommended. Run `npm ci --include=optional`, then `npm run dev`.
-Development mode uses browser-local sample votes, clearly labeled in the UI.
-The supplied ZIP's 12 original PNGs are included as `public/merch/1.png` through `12.png`. Each card uses the corresponding numbered image, and the top 3 uses the same image for its merch. Originals are unchanged (no cropping, recompression, or color filters). Files 7 and 8 are identical in the supplied archive and remain unchanged. The ZIP does not contain the header logo. The gear control allows selecting the original logo file; it displays centered with rounded corners.
+Use the existing checkout; Node 22+ recommended. Run `npm ci --include=optional`, then `npm run dev`. Development mode uses browser-local sample votes, labeled in the gear menu. Production requires the voting API and database.
 
-Generate the standalone offline file with `node scripts/export-demo.mjs`. Open `downloads/Tuc-Tac-Merch-Demo.html`. After selecting images, use the gear menu's download button to save a self-contained copy with the original images embedded. This copy opens without installing dependencies. The phone dialog is reduced to input, confirmation, and forget controls. The 12 merch images are included in the live build; the original header logo file still needs to be supplied before completing the header.
+`npm run build` builds the site. `npm test` checks phone normalization, vote sorting, original image availability and the API's merch ID limits.
 
-`npm run build` builds the site. `npm test` checks phone normalization.
+## Original images and campaign
+
+All 48 original WebP files from the supplied archive are included as `public/merch/1.webp` through `48.webp`. Each voting ID uses the corresponding numbered image. Source and build images are byte-for-byte identical to the upload; no cropping, recompression, or color filters are applied. Product names remain inside the supplied artwork only. The top-three ranking uses the same image as its merch card.
+
+`src/catalog.js` defines the 48-image catalog and campaign ID. This campaign has a separate browser sample-vote namespace so votes for the old 12-image preview are not attributed to different products. Keep the catalog order stable once a real campaign opens.
+
+The uploaded archive does not include the header logo. Use the gear menu to select the original logo file for the sample. It displays centered with rounded corners and a hover effect. Reduced-motion preferences disable the animation.
+
+## Offline sample
+
+Run `node scripts/export-demo.mjs` to create `downloads/Tuc-Tac-Merch-Demo.html`. All 48 images and Montserrat fonts are embedded. The tracked download is `downloads/Tuc-Tac-Merch-48-Anh.zip`: extract it and open its HTML file in a browser. Browser-local sample votes are separate from production results.
+
+Selecting a logo in the gear menu and choosing its download button saves a standalone copy with that original image embedded. No canvas or image transformation is used. Images are decoded once into reusable object URLs to avoid reinserting large base64 strings when voting or sorting. The original data remains embedded for export.
+
+Sorting supports default order, highest votes first and lowest votes first. Equal counts use voting ID order; sorting the catalog does not change the top-three ranking. Phone layouts show the top three as rows with large vote buttons and the catalog as two columns (one on very narrow screens).
 
 ## Cloudflare Pages
 
-Connect this GitHub repository to Pages. Build command: `npm run build`. Output directory: `dist`. Production branch: `main` once created. Name suggestion: `tuctacmerch` (availability unverified). Git integration rebuilds automatically after pushes.
+Connect this repository to Pages. Build command: `npm run build`. Output directory: `dist`. Current source branch: `preview/merch-voting`; choose the intended deployment branch in Pages. Git integration rebuilds after pushes. Project-name suggestion: `tuctacmerch` (availability unverified).
 
-Create a D1 database and bind it to Pages as `DB`. Apply `migrations/0001_votes.sql` to that database. Add a stable random secret `PHONE_HASH_SECRET` in Pages settings. Do not commit secrets or set `DEMO_MODE` in production. Redeploy after configuring bindings.
+Create a D1 database and bind it to Pages as `DB`. Apply **all** SQL migrations, including `0002_expand_to_48.sql`, which increases the ID limit while preserving existing votes. Set a stable random secret `PHONE_HASH_SECRET` in Pages settings. Never commit secret values or set `DEMO_MODE` in production. Redeploy after configuring bindings.
 
-The server stores an HMAC of normalized phone numbers and enforces one vote per phone and merch through a database primary key. Votes for different merch are allowed. Domestic and +84 formats use the same identity. No OTP: ownership of a number is not verified. Add abuse rate limits and an appropriate privacy notice before a public campaign. Production does not silently fall back to local sample votes when the API is unavailable.
+The server stores an HMAC of normalized phone numbers and enforces one vote per phone and merch through a database primary key. Different merch can receive votes from the same number. Domestic and +84 formats share one identity. No OTP: ownership of the number is not verified. Add campaign-appropriate abuse limits and privacy information before public launch. Production never silently falls back to sample votes.
 
-The remembered phone is kept locally in the browser, with a Forget option. Sample votes persist locally; uploaded sample images last until reload. For shared final images, put image assets into public/ and deploy.
-
-This project has not been deployed or connected to a Cloudflare account. D1 binding and a real deployment require that account's access.
-
-## Expanded campaign update
-
-The UI and database migration now support up to 48 merch. `src/catalog.js` defines the available image list and stable ID order; it currently contains the original 12 images. The replacement 48-image ZIP could not be transferred because it exceeded the tool's 32 MiB limit. Do not treat the new 48 images as installed. Add the actual originals and update the catalog once smaller archives or an accessible source are provided.
-
-Sorting offers default order, highest votes first, and lowest votes first. Equal counts use ID order. Sorting does not change the top-three ranking. Phones show the top three in rows with larger buttons; the catalog has two columns (one on very narrow screens). Logo hover motion is disabled for reduced-motion preferences. Apply all SQL migrations, including `0002_expand_to_48.sql`, before using the expanded campaign on D1. The migration preserves the previous votes. For a new campaign with changed IDs, close and archive the old campaign before opening voting; do not reuse old votes for unrelated products.
+No Cloudflare deployment has been performed. Before opening a new real campaign, archive the previous campaign rather than attributing its votes to a reordered catalog. This preview's replacement images have not reset any production database.
