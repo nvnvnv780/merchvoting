@@ -17,17 +17,17 @@ const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(va
 let phone = read('tuctac-phone', '');
 const demoVotesKey = `tuctac-demo-votes-${campaignId}`;
 let demoVotes = read(demoVotesKey, {});
-let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, pending = null, busy = false;
+let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, connecting = true, pending = null, busy = false;
 let photos = [...merchImages];
 let sortOrder = 'default';
 let photo = '';
-let logo = read('tuctac-logo-image', '');
+let logo = read('tuctac-logo-image', '') || '/logo.jpeg';
 const originalHtml = '<!doctype html>' + document.documentElement.outerHTML;
 const app = document.querySelector('#app');
 app.innerHTML = `
 <main>
 <section class="hero"><div class="hero-logo" id="hero-logo"></div><h1>BÌNH CHỌN MERCH COMEBACK</h1></section>
-<section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><div id="podium" class="podium"></div></section>
+<section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><p id="voting-status" role="status" hidden>Chưa kết nối được hệ thống bình chọn. Chạm “Thử lại bình chọn” để kết nối lại. Phiếu chỉ được ghi nhận khi hệ thống xác nhận thành công.</p><div id="podium" class="podium"></div></section>
 <section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi số điện thoại</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
 </main>
 <details class="sample-settings" id="demo-banner" hidden><summary aria-label="Cài đặt ảnh mẫu">⚙</summary><div class="sample-controls"><label>Ảnh logo<input type="file" id="logo-upload" accept="image/png,image/jpeg,image/webp"></label><label>Ảnh merch<input type="file" id="upload" accept="image/png,image/jpeg,image/webp"></label><button id="download-demo" type="button">Tải bản mẫu</button><small>Bản mẫu · phiếu chỉ lưu trên thiết bị này</small></div></details>
@@ -47,27 +47,35 @@ function displayImage(image) {
 }
 window.addEventListener('pagehide', e => { if (!e.persisted) { imageUrls.forEach(url=>URL.revokeObjectURL(url));imageUrls.clear(); } });
 function imageMarkup(id) { const image = photo || photos[id - 1]; return image ? `<img src="${displayImage(image)}" alt="Merch ${id}" loading="lazy" decoding="async" width="1500" height="1500">` : '<span class="image-empty" aria-label="Chờ ảnh merch gốc">＋</span>'; }
-function button(id) { return `<button class="vote ${voted.includes(id) ? 'done' : ''}" data-vote="${id}" ${!ready || busy || voted.includes(id) ? 'disabled' : ''}>${voted.includes(id) ? '✓ Đã bình chọn' : '♡ Bình chọn ngay'}</button>`; }
+function button(id) { return `<button class="vote ${voted.includes(id) ? 'done' : ''}" data-vote="${id}" ${connecting || busy || voted.includes(id) ? 'disabled' : ''}>${voted.includes(id) ? '✓ Đã bình chọn' : !ready ? (connecting ? 'Đang kết nối…' : 'Thử lại bình chọn') : '♡ Bình chọn ngay'}</button>`; }
 function render() {
  const ranked = sortMerch(counts.map((count, i) => ({ id: i + 1, count })), 'desc');
  document.querySelector('#hero-logo').innerHTML = logo ? `<img src="${logo}" alt="Logo Túc Tắc">` : '<button class="logo-empty" type="button" aria-label="Chọn file logo gốc">＋</button>';
  document.querySelector('.logo-empty')?.addEventListener('click', () => document.querySelector('#logo-upload').click());
- document.querySelector('#podium').innerHTML = [1,0,2].map(index => { const m = ranked[index]; return `<article class="podium-card place-${index+1}"><div class="place-label">${index === 0 ? '♛ ' : ''}TOP 0${index+1}</div><div class="podium-image">${imageMarkup(m.id)}<span class="rank-medal">${index+1}</span></div><div class="podium-info"><strong>${format(m.count)}</strong><span>lượt bình chọn</span>${button(m.id)}</div></article>`; }).join('');
+ document.querySelector('#podium').innerHTML = [1,0,2].map(index => { const m = ranked[index]; return `<article class="podium-card place-${index+1}"><div class="place-label">TOP ${index+1}</div><div class="podium-image">${imageMarkup(m.id)}<span class="rank-medal">${index+1}</span></div><div class="podium-info"><strong>${format(m.count)}</strong><span>lượt bình chọn</span>${button(m.id)}</div></article>`; }).join('');
  const items = sortMerch(ranked, sortOrder);
  document.querySelector('#cards').innerHTML = items.length ? items.map(m => `<article class="merch-card" data-merch-id="${m.id}"><div class="merch-image">${imageMarkup(m.id)}${voted.includes(m.id)?'<span class="voted-mark">✓</span>':''}</div><div class="card-bottom"><div class="vote-total"><strong>${format(m.count)}</strong><span>lượt bình chọn</span></div>${button(m.id)}</div></article>`).join('') : '<p class="empty">Bạn chưa bình chọn món nào. Ghé mục Tất cả merch để gửi phiếu nhé!</p>';
  document.querySelector('#identity').hidden = !phone;
  document.querySelector('#demo-banner').hidden = !demo;
+ document.querySelector('#voting-status').hidden = demo || connecting || ready;
 
 }
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),4000); }
 async function api(body) { const res=await fetch('/api/votes',body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}); const data=await res.json(); if(!res.ok) throw new Error(data.error || 'Chưa kết nối được hệ thống.'); return data; }
 async function refresh() {
+ connecting=true; render();
+ try {
  if(demo) { counts=Array.from({length:photos.length},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length); voted=demoVotes[phone] || []; ready=true; }
  else { const data=await api(); counts=Array.from({length:photos.length},(_,i)=>data.counts.find(m=>m.id===i+1)?.count || 0); voted=phone ? (await api({phone,id:1,action:'status'})).voted : []; ready=true; }
- render();
+ } catch(error) { ready=false; throw error; }
+ finally { connecting=false; render(); }
 }
 async function vote(id) {
- if(busy) return;
+ if(busy || connecting) return;
+ if(!ready) {
+  try { await refresh(); }
+  catch { toast('Chưa kết nối được hệ thống. Phiếu chưa được gửi. Bạn thử lại sau nhé.'); return; }
+ }
  if(!phone) { pending=id; document.querySelector('.submit').textContent='Xác nhận & bình chọn'; document.querySelector('#phone-error').textContent=''; dialog.showModal(); return; }
  busy=true; render();
  try {

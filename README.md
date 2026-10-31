@@ -12,7 +12,7 @@ All 48 original WebP files from the supplied archive are included as `public/mer
 
 `src/catalog.js` defines the 48-image catalog and campaign ID. This campaign has a separate browser sample-vote namespace so votes for the old 12-image preview are not attributed to different products. Keep the catalog order stable once a real campaign opens.
 
-The uploaded archive does not include the header logo. Use the gear menu to select the original logo file for the sample. It displays centered with rounded corners and a hover effect. Reduced-motion preferences disable the animation.
+The supplied header logo is included unchanged as `public/logo.jpeg` and displayed by default. Use the gear menu to select a different original logo file for the sample. It displays centered with rounded corners and a hover effect. Reduced-motion preferences disable the animation.
 
 ## Offline sample
 
@@ -20,7 +20,7 @@ Run `node scripts/export-demo.mjs` to create `downloads/Tuc-Tac-Merch-Demo.html`
 
 Selecting a logo in the gear menu and choosing its download button saves a standalone copy with that original image embedded. No canvas or image transformation is used. Images are decoded once into reusable object URLs to avoid reinserting large base64 strings when voting or sorting. The original data remains embedded for export.
 
-Sorting supports default order, highest votes first and lowest votes first. Equal counts use voting ID order; sorting the catalog does not change the top-three ranking. Phone layouts show the top three as rows with large vote buttons and the catalog as two columns (one on very narrow screens).
+Sorting supports default order, highest votes first and lowest votes first. Equal counts use voting ID order; sorting the catalog does not change the top-three ranking. Phone layouts show the top three as rows with TOP labels above the images, no image-overlay badges, and large vote buttons; the catalog uses two columns (one on very narrow screens).
 
 ## Cloudflare Pages
 
@@ -28,7 +28,7 @@ Connect this repository to Pages. Build command: `npm run build`. Output directo
 
 Create a D1 database and bind it to Pages as `DB`. Apply **all** SQL migrations, including `0002_expand_to_48.sql`, which increases the ID limit while preserving existing votes. Set a stable random secret `PHONE_HASH_SECRET` in Pages settings. Never commit secret values or set `DEMO_MODE` in production. Redeploy after configuring bindings.
 
-The server stores an HMAC of normalized phone numbers and enforces one vote per phone and merch through a database primary key. Different merch can receive votes from the same number. Domestic and +84 formats share one identity. No OTP: ownership of the number is not verified. Add campaign-appropriate abuse limits and privacy information before public launch. Production never silently falls back to sample votes.
+The server stores an HMAC of normalized phone numbers and enforces one vote per phone and merch through a database primary key. Different merch can receive votes from the same number. Domestic and +84 formats share one identity. No OTP: ownership of the number is not verified. Add campaign-appropriate abuse limits and privacy information before public launch. Production never silently falls back to sample votes. If the voting API is unavailable, the page shows a connection message and the vote buttons offer a connection retry instead of remaining permanently disabled. A successful retry resumes the voting flow.
 
 No Cloudflare deployment has been performed. Before opening a new real campaign, archive the previous campaign rather than attributing its votes to a reordered catalog. This preview's replacement images have not reset any production database.
 
