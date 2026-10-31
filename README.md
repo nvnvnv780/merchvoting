@@ -24,10 +24,16 @@ Sorting supports default order, highest votes first and lowest votes first. Equa
 
 ## Cloudflare Pages
 
-Connect this repository to Pages. Build command: `npm run build`. Output directory: `dist`. Current source branch: `preview/merch-voting`; choose the intended deployment branch in Pages. Git integration rebuilds after pushes. Project-name suggestion: `tuctacmerch` (availability unverified).
+Connect this repository to Pages. Build command: `npm run build`. Output directory: `dist`. Current source branch: `preview/merch-voting`; choose the intended deployment branch in Pages. Git integration rebuilds after pushes. Requested project name: `votemerchtuctac` and requested address: `votemerchtuctac.pages.dev` (availability unverified until creation).
 
 Create a D1 database and bind it to Pages as `DB`. Apply **all** SQL migrations, including `0002_expand_to_48.sql`, which increases the ID limit while preserving existing votes. Set a stable random secret `PHONE_HASH_SECRET` in Pages settings. Never commit secret values or set `DEMO_MODE` in production. Redeploy after configuring bindings.
 
 The server stores an HMAC of normalized phone numbers and enforces one vote per phone and merch through a database primary key. Different merch can receive votes from the same number. Domestic and +84 formats share one identity. No OTP: ownership of the number is not verified. Add campaign-appropriate abuse limits and privacy information before public launch. Production never silently falls back to sample votes.
 
 No Cloudflare deployment has been performed. Before opening a new real campaign, archive the previous campaign rather than attributing its votes to a reordered catalog. This preview's replacement images have not reset any production database.
+
+## Deployment access pending
+
+Wrangler authentication was checked and no Cloudflare login/token is available in the managed environment. Provide `CLOUDFLARE_API_TOKEN` securely through environment Secrets (destination: `api.cloudflare.com`) and the nonsecret `CLOUDFLARE_ACCOUNT_ID` through environment variables. The API token needs Cloudflare Pages Edit and D1 Edit for the selected account. Account discovery may additionally require Account Settings Read. Never put credential values into chat or repository files.
+
+Before deploying, create/check the Pages project `votemerchtuctac`, create/bind its D1 database as `DB`, apply both migrations remotely, and set a stable generated `PHONE_HASH_SECRET` as a Pages secret. Keep that generated secret stable across deployments. Deploy the actual production build with its Functions, not the offline sample. Verify `/api/votes` and one controlled vote/duplicate check on the live deployment before claiming it ready. The local Pages Functions and D1 migration/voting checks passed; they do not establish remote deployment.
