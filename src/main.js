@@ -10,13 +10,15 @@ import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/montserrat/latin-800.css';
 import './style.css';
 import { normalizePhone } from './phone.js';
+import { merchImages, maxMerchCount } from './catalog.js';
+import { sortMerch } from './sort.js';
 const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
 let phone = read('tuctac-phone', '');
 let demoVotes = read('tuctac-demo-votes', {});
-let counts = Array(12).fill(0), voted = [], demo = import.meta.env.DEV, ready = false, pending = null, busy = false;
-const defaultPhotos = ["/merch/1.png", "/merch/2.png", "/merch/3.png", "/merch/4.png", "/merch/5.png", "/merch/6.png", "/merch/7.png", "/merch/8.png", "/merch/9.png", "/merch/10.png", "/merch/11.png", "/merch/12.png"];
-let photos = [...defaultPhotos];
+let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, pending = null, busy = false;
+let photos = [...merchImages];
+let sortOrder = 'default';
 let photo = '';
 let logo = read('tuctac-logo-image', '');
 const originalHtml = '<!doctype html>' + document.documentElement.outerHTML;
@@ -25,7 +27,7 @@ app.innerHTML = `
 <main>
 <section class="hero"><div class="hero-logo" id="hero-logo"></div><h1>BÌNH CHỌN MERCH COMEBACK</h1></section>
 <section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><div id="podium" class="podium"></div></section>
-<section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi số điện thoại</span></button></div><div id="cards" class="cards"></div></section>
+<section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi số điện thoại</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
 </main>
 <details class="sample-settings" id="demo-banner" hidden><summary aria-label="Cài đặt ảnh mẫu">⚙</summary><div class="sample-controls"><label>Ảnh logo<input type="file" id="logo-upload" accept="image/png,image/jpeg,image/webp"></label><label>Ảnh merch<input type="file" id="upload" accept="image/png,image/jpeg,image/webp"></label><button id="download-demo" type="button">Tải bản mẫu</button><small>Bản mẫu · phiếu chỉ lưu trên thiết bị này</small></div></details>
 <dialog id="phone-dialog" aria-label="Số điện thoại bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Số điện thoại</label><input id="phone" type="tel" autocomplete="tel" placeholder="Nhập số điện thoại" required maxlength="20" aria-describedby="phone-error"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Xác nhận & bình chọn</button><button type="button" class="forget">Quên số trên thiết bị này</button></form></dialog><div id="toast" role="status"></div>`;
@@ -34,12 +36,12 @@ const format = n => new Intl.NumberFormat('vi-VN').format(n);
 function imageMarkup(id) { const image = photo || photos[id - 1]; return image ? `<img src="${image}" alt="Merch ${id}" loading="lazy">` : '<span class="image-empty" aria-label="Chờ ảnh merch gốc">＋</span>'; }
 function button(id) { return `<button class="vote ${voted.includes(id) ? 'done' : ''}" data-vote="${id}" ${!ready || busy || voted.includes(id) ? 'disabled' : ''}>${voted.includes(id) ? '✓ Đã bình chọn' : '♡ Bình chọn ngay'}</button>`; }
 function render() {
- const ranked = counts.map((count, i) => ({ id: i + 1, count })).sort((a,b) => b.count-a.count || a.id-b.id);
+ const ranked = sortMerch(counts.map((count, i) => ({ id: i + 1, count })), 'desc');
  document.querySelector('#hero-logo').innerHTML = logo ? `<img src="${logo}" alt="Logo Túc Tắc">` : '<button class="logo-empty" type="button" aria-label="Chọn file logo gốc">＋</button>';
  document.querySelector('.logo-empty')?.addEventListener('click', () => document.querySelector('#logo-upload').click());
  document.querySelector('#podium').innerHTML = [1,0,2].map(index => { const m = ranked[index]; return `<article class="podium-card place-${index+1}"><div class="place-label">${index === 0 ? '♛ ' : ''}TOP 0${index+1}</div><div class="podium-image">${imageMarkup(m.id)}<span class="rank-medal">${index+1}</span></div><div class="podium-info"><strong>${format(m.count)}</strong><span>lượt bình chọn</span>${button(m.id)}</div></article>`; }).join('');
- const items = [...ranked].sort((a,b) => a.id-b.id);
- document.querySelector('#cards').innerHTML = items.length ? items.map(m => `<article class="merch-card"><div class="merch-image">${imageMarkup(m.id)}${voted.includes(m.id)?'<span class="voted-mark">✓</span>':''}</div><div class="card-bottom"><div class="vote-total"><strong>${format(m.count)}</strong><span>lượt bình chọn</span></div>${button(m.id)}</div></article>`).join('') : '<p class="empty">Bạn chưa bình chọn món nào. Ghé mục Tất cả merch để gửi phiếu nhé!</p>';
+ const items = sortMerch(ranked, sortOrder);
+ document.querySelector('#cards').innerHTML = items.length ? items.map(m => `<article class="merch-card" data-merch-id="${m.id}"><div class="merch-image">${imageMarkup(m.id)}${voted.includes(m.id)?'<span class="voted-mark">✓</span>':''}</div><div class="card-bottom"><div class="vote-total"><strong>${format(m.count)}</strong><span>lượt bình chọn</span></div>${button(m.id)}</div></article>`).join('') : '<p class="empty">Bạn chưa bình chọn món nào. Ghé mục Tất cả merch để gửi phiếu nhé!</p>';
  document.querySelector('#identity').hidden = !phone;
  document.querySelector('#demo-banner').hidden = !demo;
 
@@ -47,8 +49,8 @@ function render() {
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),4000); }
 async function api(body) { const res=await fetch('/api/votes',body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}); const data=await res.json(); if(!res.ok) throw new Error(data.error || 'Chưa kết nối được hệ thống.'); return data; }
 async function refresh() {
- if(demo) { counts=Array.from({length:12},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length); voted=demoVotes[phone] || []; ready=true; }
- else { const data=await api(); counts=Array.from({length:12},(_,i)=>data.counts.find(m=>m.id===i+1)?.count || 0); voted=phone ? (await api({phone,id:1,action:'status'})).voted : []; ready=true; }
+ if(demo) { counts=Array.from({length:photos.length},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length); voted=demoVotes[phone] || []; ready=true; }
+ else { const data=await api(); counts=Array.from({length:photos.length},(_,i)=>data.counts.find(m=>m.id===i+1)?.count || 0); voted=phone ? (await api({phone,id:1,action:'status'})).voted : []; ready=true; }
  render();
 }
 async function vote(id) {
@@ -97,6 +99,8 @@ document.querySelector('#download-demo').onclick = () => {
 if(window.__TUCTAC_ASSETS__) {
  logo=window.__TUCTAC_ASSETS__.logo || logo;
  photo=window.__TUCTAC_ASSETS__.photo || photo;
- if(Array.isArray(window.__TUCTAC_ASSETS__.photos) && window.__TUCTAC_ASSETS__.photos.length === 12) photos=window.__TUCTAC_ASSETS__.photos;
+ if(Array.isArray(window.__TUCTAC_ASSETS__.photos) && window.__TUCTAC_ASSETS__.photos.length > 0 && window.__TUCTAC_ASSETS__.photos.length <= maxMerchCount) photos=window.__TUCTAC_ASSETS__.photos;
 }
+counts = Array(photos.length).fill(0);
+document.querySelector('#sort-order').onchange = e => { sortOrder=e.target.value;render(); };
 render();refresh().catch(()=>{toast('Chưa kết nối dữ liệu bình chọn. Vui lòng thử lại sau.');});

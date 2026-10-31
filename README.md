@@ -21,3 +21,9 @@ The server stores an HMAC of normalized phone numbers and enforces one vote per 
 The remembered phone is kept locally in the browser, with a Forget option. Sample votes persist locally; uploaded sample images last until reload. For shared final images, put image assets into public/ and deploy.
 
 This project has not been deployed or connected to a Cloudflare account. D1 binding and a real deployment require that account's access.
+
+## Expanded campaign update
+
+The UI and database migration now support up to 48 merch. `src/catalog.js` defines the available image list and stable ID order; it currently contains the original 12 images. The replacement 48-image ZIP could not be transferred because it exceeded the tool's 32 MiB limit. Do not treat the new 48 images as installed. Add the actual originals and update the catalog once smaller archives or an accessible source are provided.
+
+Sorting offers default order, highest votes first, and lowest votes first. Equal counts use ID order. Sorting does not change the top-three ranking. Phones show the top three in rows with larger buttons; the catalog has two columns (one on very narrow screens). Logo hover motion is disabled for reduced-motion preferences. Apply all SQL migrations, including `0002_expand_to_48.sql`, before using the expanded campaign on D1. The migration preserves the previous votes. For a new campaign with changed IDs, close and archive the old campaign before opening voting; do not reuse old votes for unrelated products.
