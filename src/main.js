@@ -14,7 +14,7 @@ import { merchImages, maxMerchCount, campaignId } from './catalog.js';
 import { sortMerch } from './sort.js';
 const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
-let phone = read('tuctac-phone', '');
+let phone = normalizePhone(read('tuctac-phone', '')) || '';
 const demoVotesKey = `tuctac-demo-votes-${campaignId}`;
 let demoVotes = read(demoVotesKey, {});
 let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, connecting = true, pending = null, busy = false;
@@ -29,6 +29,7 @@ app.innerHTML = `
 <section class="hero"><div class="hero-logo" id="hero-logo"></div><h1>BÌNH CHỌN MERCH COMEBACK</h1></section>
 <section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><p id="voting-status" role="status" hidden>Chưa kết nối được hệ thống bình chọn. Chạm “Thử lại bình chọn” để kết nối lại. Phiếu chỉ được ghi nhận khi hệ thống xác nhận thành công.</p><div id="podium" class="podium"></div></section>
 <section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi số điện thoại</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
+<section class="section suggestions" aria-labelledby="suggestion-title"><h2 id="suggestion-title">ĐÓNG GÓP Ý KIẾN</h2><p class="suggestion-intro">Mí bà muốn có thêm merch gì hay có góp ý gì thì cho tụi tui bít với nhen</p><form id="suggestion-form"><div id="feedback-phone-field"><label for="feedback-phone">Số điện thoại</label><input id="feedback-phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Nhập số điện thoại" aria-describedby="wish-status"></div><p id="feedback-phone-saved" hidden>Đã dùng số điện thoại bạn nhập ở phần bình chọn. <button id="feedback-change-phone" type="button">Đổi số</button></p><label for="merch-wish">Ý kiến của bạn</label><textarea id="merch-wish" name="wish" rows="4" maxlength="1000" required placeholder="Bạn muốn thêm merch gì hoặc góp ý cho tụi tui nè…" aria-describedby="wish-hint wish-status"></textarea><small id="wish-hint">Tối đa 1.000 ký tự. Khi gửi, số điện thoại và ý kiến của bạn sẽ được chuyển cho Túc Tắc để tiếp nhận góp ý.</small><button class="primary" type="submit">Gửi ý kiến ♡</button><p id="wish-status" role="status" aria-live="polite"></p></form></section>
 </main>
 <details class="sample-settings" id="demo-banner" hidden><summary aria-label="Cài đặt ảnh mẫu">⚙</summary><div class="sample-controls"><label>Ảnh logo<input type="file" id="logo-upload" accept="image/png,image/jpeg,image/webp"></label><label>Ảnh merch<input type="file" id="upload" accept="image/png,image/jpeg,image/webp"></label><button id="download-demo" type="button">Tải bản mẫu</button><small>Bản mẫu · phiếu chỉ lưu trên thiết bị này</small></div></details>
 <dialog id="phone-dialog" aria-label="Số điện thoại bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Số điện thoại</label><input id="phone" type="tel" autocomplete="tel" placeholder="Nhập số điện thoại" required maxlength="20" aria-describedby="phone-error"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Xác nhận & bình chọn</button><button type="button" class="forget">Quên số trên thiết bị này</button></form></dialog><div id="toast" role="status"></div>`;
@@ -55,6 +56,7 @@ function render() {
  document.querySelector('#podium').innerHTML = [1,0,2].map(index => { const m = ranked[index]; return `<article class="podium-card place-${index+1}"><div class="place-label">TOP ${index+1}</div><div class="podium-image">${imageMarkup(m.id)}<span class="rank-medal">${index+1}</span></div><div class="podium-info"><strong>${format(m.count)}</strong><span>lượt bình chọn</span>${button(m.id)}</div></article>`; }).join('');
  const items = sortMerch(ranked, sortOrder);
  document.querySelector('#cards').innerHTML = items.length ? items.map(m => `<article class="merch-card" data-merch-id="${m.id}"><div class="merch-image">${imageMarkup(m.id)}${voted.includes(m.id)?'<span class="voted-mark">✓</span>':''}</div><div class="card-bottom"><div class="vote-total"><strong>${format(m.count)}</strong><span>lượt bình chọn</span></div>${button(m.id)}</div></article>`).join('') : '<p class="empty">Bạn chưa bình chọn món nào. Ghé mục Tất cả merch để gửi phiếu nhé!</p>';
+ syncFeedbackPhone();
  document.querySelector('#identity').hidden = !phone;
  document.querySelector('#demo-banner').hidden = !demo;
  document.querySelector('#voting-status').hidden = demo || connecting || ready;
@@ -125,3 +127,31 @@ if(window.__TUCTAC_ASSETS__) {
 counts = Array(photos.length).fill(0);
 document.querySelector('#sort-order').onchange = e => { sortOrder=e.target.value;render(); };
 render();refresh().catch(()=>{toast('Chưa kết nối dữ liệu bình chọn. Vui lòng thử lại sau.');});
+
+let wishRequest = null;
+function syncFeedbackPhone() {
+ const input = document.querySelector('#feedback-phone');
+ input.required = !phone; input.disabled = !!phone;
+ document.querySelector('#feedback-phone-field').hidden = !!phone;
+ document.querySelector('#feedback-phone-saved').hidden = !phone;
+}
+document.querySelector('#feedback-change-phone').onclick = () => document.querySelector('#identity').click();
+document.querySelector('#suggestion-form').addEventListener('submit', async event => {
+ event.preventDefault();
+ const form = event.currentTarget, input = form.querySelector('textarea'), submit = form.querySelector('button[type="submit"]');
+ const status = document.querySelector('#wish-status'), wish = input.value.trim();
+ if (submit.disabled) return;
+ const feedbackPhone = phone || normalizePhone(document.querySelector('#feedback-phone').value);
+ if (!feedbackPhone) { status.textContent = 'Bạn nhập số di động Việt Nam hợp lệ gồm 10 chữ số nhé.'; document.querySelector('#feedback-phone').focus(); return; }
+ if (!wish) { status.textContent = 'Bạn điền ý kiến trước nhé.'; input.focus(); return; }
+ if (demo) { status.textContent = 'Đây là bản mẫu. Ý kiến chưa được gửi.'; return; }
+ if (!wishRequest || wishRequest.wish !== wish || wishRequest.phone !== feedbackPhone) wishRequest = {wish, phone:feedbackPhone, requestId:crypto.randomUUID()};
+ submit.disabled = true; submit.textContent = 'Đang gửi…'; status.textContent = '';
+ try {
+  const response = await fetch('/api/suggestions', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(wishRequest),signal:AbortSignal.timeout(25000)});
+  const result = await response.json();
+  if (!response.ok || result.ok !== true) throw new Error(result.error || 'Chưa gửi được. Bạn thử lại nhé.');
+  input.value = ''; wishRequest = null; status.textContent = 'Tụi tui đã nhận được ý kiến. Cảm ơn bạn ♡';
+ } catch (error) { status.textContent = error.name === 'TimeoutError' ? 'Chưa xác nhận được phản hồi. Bạn bấm gửi lại nhé.' : error.message || 'Chưa gửi được. Bạn thử lại nhé.'; }
+ finally { submit.disabled = false; submit.textContent = 'Gửi ý kiến ♡'; }
+});

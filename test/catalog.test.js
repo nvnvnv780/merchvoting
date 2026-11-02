@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { merchImages, maxMerchCount } from '../src/catalog.js';
 import { onRequest } from '../functions/api/votes.js';
-test('48 original WebP images are available in voting ID order', () => {
+test('48 images remain in voting ID order with the replacement at 41', () => {
  assert.equal(merchImages.length,48);
  assert.equal(maxMerchCount,48);
  for(let i=0;i<48;i++){
-  assert.equal(merchImages[i],`/merch/${i+1}.webp`);
+  assert.equal(merchImages[i],i===40 ? '/merch/41.jpeg' : `/merch/${i+1}.webp`);
   const bytes=fs.readFileSync(new URL(`../public${merchImages[i]}`,import.meta.url));
-  assert.equal(bytes.toString('ascii',0,4),'RIFF');assert.equal(bytes.toString('ascii',8,12),'WEBP');
+  if(i===40) assert.equal(bytes.toString('hex',0,2),'ffd8');
+  else {assert.equal(bytes.toString('ascii',0,4),'RIFF');assert.equal(bytes.toString('ascii',8,12),'WEBP');}
  }
 });
 test('voting API accepts the final merch and rejects out-of-range IDs', async () => {

@@ -8,7 +8,7 @@ Use the existing checkout; Node 22+ recommended. Run `npm ci --include=optional`
 
 ## Original images and campaign
 
-All 48 original WebP files from the supplied archive are included as `public/merch/1.webp` through `48.webp`. Each voting ID uses the corresponding numbered image. Source and build images are byte-for-byte identical to the upload; no cropping, recompression, or color filters are applied. Product names remain inside the supplied artwork only. The top-three ranking uses the same image as its merch card.
+The original 48 WebP files from the supplied archive are included as `public/merch/1.webp` through `48.webp`. Voting ID 41 now uses the replacement original JPEG at `public/merch/41.jpeg`; all other IDs keep the numbered WebP images. Source and build images are byte-for-byte identical to the upload; no cropping, recompression, or color filters are applied. Product names remain inside the supplied artwork only. The top-three ranking uses the same image as its merch card.
 
 `src/catalog.js` defines the 48-image catalog and campaign ID. This campaign has a separate browser sample-vote namespace so votes for the old 12-image preview are not attributed to different products. Keep the catalog order stable once a real campaign opens.
 
@@ -30,10 +30,24 @@ Create a D1 database and bind it to Pages as `DB`. Apply **all** SQL migrations,
 
 The server stores an HMAC of normalized phone numbers and enforces one vote per phone and merch through a database primary key. Different merch can receive votes from the same number. Domestic and +84 formats share one identity. No OTP: ownership of the number is not verified. Add campaign-appropriate abuse limits and privacy information before public launch. Production never silently falls back to sample votes. If the voting API is unavailable, the page shows a connection message and the vote buttons offer a connection retry instead of remaining permanently disabled. A successful retry resumes the voting flow.
 
-No Cloudflare deployment has been performed. Before opening a new real campaign, archive the previous campaign rather than attributing its votes to a reordered catalog. This preview's replacement images have not reset any production database.
+See GitHub commit checks for the current deployment status. Before opening a new real campaign, archive the previous campaign rather than attributing its votes to a reordered catalog. This preview's replacement images have not reset any production database.
 
 ## Deployment access pending
 
 Wrangler authentication was checked and no Cloudflare login/token is available in the managed environment. Provide `CLOUDFLARE_API_TOKEN` securely through environment Secrets (destination: `api.cloudflare.com`) and the nonsecret `CLOUDFLARE_ACCOUNT_ID` through environment variables. The API token needs Cloudflare Pages Edit and D1 Edit for the selected account. Account discovery may additionally require Account Settings Read. Never put credential values into chat or repository files.
 
 Before deploying, create/check the Pages project `votemerchtuctac`, create/bind its D1 database as `DB`, apply both migrations remotely, and set a stable generated `PHONE_HASH_SECRET` as a Pages secret. Keep that generated secret stable across deployments. Deploy the actual production build with its Functions, not the offline sample. Verify `/api/votes` and one controlled vote/duplicate check on the live deployment before claiming it ready. The local Pages Functions and D1 migration/voting checks passed; they do not establish remote deployment.
+
+## Merch suggestions → Google Sheets
+
+The final section posts to `/api/suggestions`; success is shown only after Google confirms the row. The form uses the saved voting phone number; otherwise it requires a valid Vietnamese mobile number. Phone and feedback are sent only when the customer submits. In local/offline demo mode nothing is sent. Retries from the same form reuse a UUID; Apps Script locks and deduplicates rows by UUID.
+
+New destination: https://docs.google.com/spreadsheets/d/1ONK0DZdlQOWWJeK-mU2VB2LcoSqchSZr06McTjz7hOc/edit (tab `Mong muốn`, columns: time in Vietnam, customer feedback, request ID, phone).
+
+1. In that Sheet open Extensions → Apps Script. Paste `integrations/merch-suggestions.gs`.
+2. In Apps Script Project Settings → Script properties, add `SUGGESTIONS_WEBHOOK_SECRET` with a new random secret of at least 32 characters. Do not reuse `PHONE_HASH_SECRET`.
+3. Deploy → New deployment → Web app. Execute as yourself, access Anyone. Authorize spreadsheet access; copy the `/exec` URL.
+4. In Cloudflare Pages Production secrets set `SUGGESTIONS_WEBHOOK_URL` to that URL and `SUGGESTIONS_WEBHOOK_SECRET` to the same new secret. Keep both server-side. Redeploy the source including Pages Functions.
+5. Submit a controlled suggestion through the deployed page and verify exactly one row appears; retry the same request ID and verify no duplicate. No production end-to-end check has been completed yet.
+
+The chat's Google Drive connection can create the spreadsheet but does not deploy Apps Script or grant the live Cloudflare site ongoing Google access. The web app deployment above is required.
