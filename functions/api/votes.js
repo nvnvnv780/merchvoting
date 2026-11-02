@@ -1,4 +1,4 @@
-import { normalizePhone } from '../../src/phone.js';
+import { normalizeIdentity, identityHashInput } from '../../src/identity.js';
 import { visibleMerchIds } from '../../src/catalog.js';
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function onRequest({ request, env }) {
@@ -11,10 +11,10 @@ export async function onRequest({ request, env }) {
   if (request.headers.get('Origin') !== new URL(request.url).origin) return json({ error: 'Yêu cầu không hợp lệ.' }, 403);
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Dữ liệu không hợp lệ.' }, 400); }
-  const phone = normalizePhone(body.phone);
-  if (!phone || !Number.isInteger(body.id) || !visibleMerchIds.includes(body.id)) return json({ error: 'Vui lòng kiểm tra số điện thoại.' }, 400);
+  const identity = normalizeIdentity(body);
+  if (!identity || !Number.isInteger(body.id) || !visibleMerchIds.includes(body.id)) return json({ error: 'Email hoặc số điện thoại chưa hợp lệ.' }, 400);
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.PHONE_HASH_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const hash = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(phone))), b => b.toString(16).padStart(2, '0')).join('');
+  const hash = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(identityHashInput(identity)))), b => b.toString(16).padStart(2, '0')).join('');
   if (body.action === 'status') {
     const { results } = await env.DB.prepare('SELECT merch_id FROM votes WHERE phone_hash = ?').bind(hash).all();
     return json({ voted: results.map(row => row.merch_id).filter(id => visibleMerchIds.includes(id)) });

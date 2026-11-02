@@ -55,3 +55,9 @@ The chat's Google Drive connection can create the spreadsheet but does not deplo
 ## Duplicate removed
 
 Original voting ID 46 is retired. The public catalog and ranking show 47 items; original images 47 and 48 now occupy display positions 46 and 47. Their voting IDs, image files and existing votes stay unchanged. The API rejects new votes for retired ID 46 and omits it from counts and phone status. Historic database rows are retained without reassigning them.
+
+## Shared contact field
+
+The voting dialog uses one field labeled Số điện thoại/email, detecting the contact type automatically. Phone HMAC input stays unchanged, so existing votes and saved phones remain valid. Email is trimmed, lowercased, and prefixed with email: for hashing. Each contact remains a separate voting identity without ownership verification. No database migration or secret change is required.
+
+The existing Google Sheets integration and Apps Script are unchanged. Feedback still uses a phone number: phone voters reuse their number, while email voters can enter a phone in the feedback form.

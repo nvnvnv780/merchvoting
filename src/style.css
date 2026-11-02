@@ -16,3 +16,5 @@
 .suggestions input{display:block;width:100%;font:inherit;font-size:16px;padding:14px;border:1px solid #b8cbe0;border-radius:10px;background:white;color:var(--navy);min-height:50px}.suggestions label{margin-top:18px}.suggestions .primary{min-height:52px;touch-action:manipulation}.suggestions h2{line-height:1.4}@media(min-width:601px){.suggestions form{padding:30px}.suggestions .primary{width:auto;min-width:220px;display:block;margin-left:auto}}
 
 .suggestions .primary{margin-top:22px}.suggestions h2{margin-bottom:24px}
+
+.suggestions input{margin-bottom:18px}dialog label{margin-bottom:14px}.forget{font-size:12px}

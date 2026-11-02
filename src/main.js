@@ -9,12 +9,13 @@ import '@fontsource/montserrat/latin-600.css';
 import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/montserrat/latin-800.css';
 import './style.css';
-import { normalizePhone } from './phone.js';
+import { normalizeIdentity, identityPayload, identityHashInput, parseContact } from './identity.js';
 import { merchImages, maxMerchCount, campaignId, visibleMerchIds } from './catalog.js';
 import { sortMerch } from './sort.js';
 const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
-let phone = normalizePhone(read('tuctac-phone', '')) || '';
+let account = normalizeIdentity(read('tuctac-account', null)) || normalizeIdentity({phone:read('tuctac-phone', '')});
+const accountKey = () => account ? identityHashInput(account) : '';
 const demoVotesKey = `tuctac-demo-votes-${campaignId}`;
 let demoVotes = read(demoVotesKey, {});
 let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, connecting = true, pending = null, busy = false;
@@ -28,11 +29,11 @@ app.innerHTML = `
 <main>
 <section class="hero"><div class="hero-logo" id="hero-logo"></div><h1>BÌNH CHỌN MERCH COMEBACK</h1></section>
 <section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><p id="voting-status" role="status" hidden>Chưa kết nối được hệ thống bình chọn. Chạm “Thử lại bình chọn” để kết nối lại. Phiếu chỉ được ghi nhận khi hệ thống xác nhận thành công.</p><div id="podium" class="podium"></div></section>
-<section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi số điện thoại</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
+<section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi tài khoản</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
 <section class="section suggestions" aria-labelledby="suggestion-title"><h2 id="suggestion-title">ĐÓNG GÓP Ý KIẾN</h2><form id="suggestion-form"><div id="feedback-phone-field"><label for="feedback-phone">Số điện thoại</label><input id="feedback-phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Nhập số điện thoại" aria-describedby="wish-status"></div><label for="merch-wish">Ý kiến của bạn</label><textarea id="merch-wish" name="wish" rows="4" maxlength="1000" required placeholder="Mí bà muốn có thêm merch gì hay có góp ý gì thì cho tụi tui bít với nhen" aria-describedby="wish-status"></textarea><button class="primary" type="submit">Gửi ý kiến ♡</button><p id="wish-status" role="status" aria-live="polite"></p></form></section>
 </main>
 <details class="sample-settings" id="demo-banner" hidden><summary aria-label="Cài đặt ảnh mẫu">⚙</summary><div class="sample-controls"><label>Ảnh logo<input type="file" id="logo-upload" accept="image/png,image/jpeg,image/webp"></label><label>Ảnh merch<input type="file" id="upload" accept="image/png,image/jpeg,image/webp"></label><button id="download-demo" type="button">Tải bản mẫu</button><small>Bản mẫu · phiếu chỉ lưu trên thiết bị này</small></div></details>
-<dialog id="phone-dialog" aria-label="Số điện thoại bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Số điện thoại</label><input id="phone" type="tel" autocomplete="tel" placeholder="Nhập số điện thoại" required maxlength="20" aria-describedby="phone-error"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Xác nhận & bình chọn</button><button type="button" class="forget">Quên số trên thiết bị này</button></form></dialog><div id="toast" role="status"></div>`;
+<dialog id="phone-dialog" aria-label="Tài khoản bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Số điện thoại/email</label><input id="phone" type="text" inputmode="text" autocomplete="username" placeholder="Số điện thoại/email" required maxlength="254" aria-describedby="phone-error" aria-label="Email hoặc số điện thoại"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Bình chọn</button><button type="button" class="forget">Đăng xuất</button></form></dialog><div id="toast" role="status"></div>`;
 const dialog = document.querySelector('dialog');
 const format = n => new Intl.NumberFormat('vi-VN').format(n);
 const imageUrls = new Map();
@@ -57,7 +58,7 @@ function render() {
  const items = sortMerch(ranked, sortOrder);
  document.querySelector('#cards').innerHTML = items.length ? items.map(m => `<article class="merch-card" data-merch-id="${m.id}"><div class="merch-image">${imageMarkup(m.id)}${voted.includes(m.id)?'<span class="voted-mark">✓</span>':''}</div><div class="card-bottom"><div class="vote-total"><strong>${format(m.count)}</strong><span>lượt bình chọn</span></div>${button(m.id)}</div></article>`).join('') : '<p class="empty">Bạn chưa bình chọn món nào. Ghé mục Tất cả merch để gửi phiếu nhé!</p>';
  syncFeedbackPhone();
- document.querySelector('#identity').hidden = !phone;
+ document.querySelector('#identity').hidden = !account;
  document.querySelector('#demo-banner').hidden = !demo;
  document.querySelector('#voting-status').hidden = demo || connecting || ready;
 
@@ -67,8 +68,8 @@ async function api(body) { const res=await fetch('/api/votes',body ? {method:'PO
 async function refresh() {
  connecting=true; render();
  try {
- if(demo) { counts=Array.from({length:photos.length},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length); voted=demoVotes[phone] || []; ready=true; }
- else { const data=await api(); counts=Array.from({length:photos.length},(_,i)=>data.counts.find(m=>m.id===i+1)?.count || 0); voted=phone ? (await api({phone,id:1,action:'status'})).voted : []; ready=true; }
+ if(demo) { counts=Array.from({length:photos.length},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length); voted=demoVotes[accountKey()] || []; ready=true; }
+ else { const data=await api(); counts=Array.from({length:photos.length},(_,i)=>data.counts.find(m=>m.id===i+1)?.count || 0); voted=account ? (await api({...identityPayload(account),id:1,action:'status'})).voted : []; ready=true; }
  } catch(error) { ready=false; throw error; }
  finally { connecting=false; render(); }
 }
@@ -78,21 +79,30 @@ async function vote(id) {
   try { await refresh(); }
   catch { toast('Chưa kết nối được hệ thống. Phiếu chưa được gửi. Bạn thử lại sau nhé.'); return; }
  }
- if(!phone) { pending=id; document.querySelector('.submit').textContent='Xác nhận & bình chọn'; document.querySelector('#phone-error').textContent=''; dialog.showModal(); return; }
+ if(!account) { pending=id; document.querySelector('.submit').textContent='Bình chọn'; document.querySelector('#phone-error').textContent=''; dialog.showModal(); return; }
  busy=true; render();
  try {
   let duplicate=false;
-  if(demo) { const ids=demoVotes[phone] || []; duplicate=ids.includes(id); if(!duplicate) { demoVotes[phone]=[...ids,id]; save(demoVotesKey,demoVotes); } }
-  else duplicate=(await api({phone,id})).duplicate;
-  await refresh(); toast(duplicate ? 'Số điện thoại này đã bình chọn merch này rồi nhé!' : 'Đã gửi một phiếu yêu thương. Cảm ơn bạn! ♡');
+  if(demo) { const ids=demoVotes[accountKey()] || []; duplicate=ids.includes(id); if(!duplicate) { demoVotes[accountKey()]=[...ids,id]; save(demoVotesKey,demoVotes); } }
+  else duplicate=(await api({...identityPayload(account),id})).duplicate;
+  await refresh(); toast(duplicate ? 'Tài khoản này đã bình chọn rồi.' : 'Đã gửi một phiếu yêu thương. Cảm ơn bạn! ♡');
  } catch { toast('Chưa gửi được phiếu. Bạn thử lại sau nhé.'); }
  finally { busy=false; render(); }
 }
 app.addEventListener('click',e=>{const b=e.target.closest('[data-vote]'); if(b) vote(Number(b.dataset.vote));});
-document.querySelector('#identity').onclick=()=>{pending=null; document.querySelector('#phone').value=phone; document.querySelector('#phone-error').textContent=''; document.querySelector('.submit').textContent='Lưu số điện thoại';dialog.showModal();};
+document.querySelector('#identity').onclick=()=>{
+ pending=null;
+ document.querySelector('#phone').value=account?.value || '';document.querySelector('#phone-error').textContent='';document.querySelector('.submit').textContent='Lưu';dialog.showModal();
+};
 document.querySelector('.close').onclick=()=>dialog.close();
-document.querySelector('.forget').onclick=()=>{phone='';voted=[];save('tuctac-phone','');dialog.close();render();toast('Đã quên số trên thiết bị này. Phiếu đã gửi vẫn được giữ.');};
-document.querySelector('#phone-form').onsubmit=async e=>{e.preventDefault();const normalized=normalizePhone(document.querySelector('#phone').value);if(!normalized){document.querySelector('#phone-error').textContent='Bạn nhập số di động Việt Nam hợp lệ gồm 10 chữ số nhé.';return;}phone=normalized;save('tuctac-phone',phone);dialog.close();const id=pending;pending=null;if(id)await vote(id);else try{await refresh();}catch{toast('Chưa tải được phiếu của số này.');}};
+document.querySelector('.forget').onclick=()=>{account=null;voted=[];save('tuctac-account',null);save('tuctac-phone','');dialog.close();render();toast('Đã đăng xuất.');};
+document.querySelector('#phone-form').onsubmit=async e=>{
+ e.preventDefault();
+ const normalized=parseContact(document.querySelector('#phone').value);
+ if(!normalized){document.querySelector('#phone-error').textContent='Thông tin chưa hợp lệ.';return;}
+ account=normalized;save('tuctac-account',identityPayload(account));save('tuctac-phone',account.type==='phone'?account.value:'');
+ dialog.close();const id=pending;pending=null;if(id)await vote(id);else try{await refresh();}catch{toast('Chưa tải được bình chọn.');}
+};
 function selectImage(input, type) {
  input.onchange = async e => {
   const file = e.target.files[0];
@@ -131,19 +141,20 @@ render();refresh().catch(()=>{toast('Chưa kết nối dữ liệu bình chọn.
 let wishRequest = null;
 function syncFeedbackPhone() {
  const input = document.querySelector('#feedback-phone');
- input.required = !phone; input.disabled = !!phone;
- document.querySelector('#feedback-phone-field').hidden = !!phone;
+ const hasPhone=account?.type==='phone';
+ input.required = !hasPhone; input.disabled = hasPhone;
+ document.querySelector('#feedback-phone-field').hidden = hasPhone;
 }
 document.querySelector('#suggestion-form').addEventListener('submit', async event => {
  event.preventDefault();
  const form = event.currentTarget, input = form.querySelector('textarea'), submit = form.querySelector('button[type="submit"]');
  const status = document.querySelector('#wish-status'), wish = input.value.trim();
  if (submit.disabled) return;
- const feedbackPhone = phone || normalizePhone(document.querySelector('#feedback-phone').value);
- if (!feedbackPhone) { status.textContent = 'Bạn nhập số di động Việt Nam hợp lệ gồm 10 chữ số nhé.'; document.querySelector('#feedback-phone').focus(); return; }
+ const feedbackAccount = account?.type==='phone' ? account : normalizeIdentity({phone:document.querySelector('#feedback-phone').value});
+ if (!feedbackAccount) { status.textContent = 'Số điện thoại chưa hợp lệ.'; document.querySelector('#feedback-phone').focus(); return; }
  if (!wish) { status.textContent = 'Bạn điền ý kiến trước nhé.'; input.focus(); return; }
  if (demo) { status.textContent = 'Đây là bản mẫu. Ý kiến chưa được gửi.'; return; }
- if (!wishRequest || wishRequest.wish !== wish || wishRequest.phone !== feedbackPhone) wishRequest = {wish, phone:feedbackPhone, requestId:crypto.randomUUID()};
+ if (!wishRequest || wishRequest.wish !== wish || wishRequest.contactKey !== identityHashInput(feedbackAccount)) wishRequest = {wish, ...identityPayload(feedbackAccount), contactKey:identityHashInput(feedbackAccount), requestId:crypto.randomUUID()};
  submit.disabled = true; submit.textContent = 'Đang gửi…'; status.textContent = '';
  try {
   const response = await fetch('/api/suggestions', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(wishRequest),signal:AbortSignal.timeout(25000)});
