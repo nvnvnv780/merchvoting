@@ -23,3 +23,7 @@ Tab `Mong muốn` có các cột: Thời gian (Việt Nam) · Ý kiến khách h
 Nếu sửa Apps Script về sau: Deploy → Manage deployments → Edit → New version → Deploy để giữ nguyên URL. Không chia sẻ secret trong chat hoặc đưa vào mã nguồn frontend.
 
 Mã script có khóa chống ghi đồng thời và mã phản hồi để tránh ghi trùng khi gửi lại cùng yêu cầu. Chưa có OTP xác minh chủ sở hữu số điện thoại.
+
+## Nhận cả số điện thoại và email
+
+Thay toàn bộ code Apps Script bằng phiên bản mới của `merch-suggestions.gs` rồi lưu. Chọn Triển khai → Quản lý các bản triển khai → bút chì → Phiên bản mới → Triển khai. Giữ URL và secret hiện có. Script sẽ ghi số điện thoại hoặc email vào cùng cột D và đổi tiêu đề thành Số điện thoại/email, không thay đổi các phản hồi cũ. Web đã có một ô nhập chung và tự dùng thông tin ở phần bình chọn. Email chưa thể lưu qua Apps Script cũ chỉ chấp nhận số điện thoại.

@@ -60,4 +60,4 @@ Original voting ID 46 is retired. The public catalog and ranking show 47 items; 
 
 The voting dialog uses one field labeled Số điện thoại/email, detecting the contact type automatically. Phone HMAC input stays unchanged, so existing votes and saved phones remain valid. Email is trimmed, lowercased, and prefixed with email: for hashing. Each contact remains a separate voting identity without ownership verification. No database migration or secret change is required.
 
-The existing Google Sheets integration and Apps Script are unchanged. Feedback still uses a phone number: phone voters reuse their number, while email voters can enter a phone in the feedback form.
+Feedback uses the same phone/email contact as voting and hides the contact input for either saved account type. Guests can enter either in one field. The owner must deploy the updated integrations/merch-suggestions.gs at the existing Apps Script URL to accept email feedback. Its header in column D becomes Số điện thoại/email; rows, request IDs, and columns A:C remain unchanged. Phone-only Apps Script versions remain compatible with phone submissions. No Cloudflare secret change is needed.

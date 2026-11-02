@@ -23,3 +23,7 @@ test('only confirms success after upstream confirms; forwards request ID',async(
   assert.equal((await onRequest({request:request(),env:configured})).status,502);
  }finally{globalThis.fetch=original;}
 });
+
+test('rejects malformed email before contacting Sheets',async()=>{
+ assert.equal((await onRequest({request:request({email:'invalid',wish:'Túi tote',requestId:body.requestId}),env:configured})).status,400);
+});

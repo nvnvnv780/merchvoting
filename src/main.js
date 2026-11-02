@@ -30,7 +30,7 @@ app.innerHTML = `
 <section class="hero"><div class="hero-logo" id="hero-logo"></div><h1>BÌNH CHỌN MERCH COMEBACK</h1></section>
 <section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><p id="voting-status" role="status" hidden>Chưa kết nối được hệ thống bình chọn. Chạm “Thử lại bình chọn” để kết nối lại. Phiếu chỉ được ghi nhận khi hệ thống xác nhận thành công.</p><div id="podium" class="podium"></div></section>
 <section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi tài khoản</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
-<section class="section suggestions" aria-labelledby="suggestion-title"><h2 id="suggestion-title">ĐÓNG GÓP Ý KIẾN</h2><form id="suggestion-form"><div id="feedback-phone-field"><label for="feedback-phone">Số điện thoại</label><input id="feedback-phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Nhập số điện thoại" aria-describedby="wish-status"></div><label for="merch-wish">Ý kiến của bạn</label><textarea id="merch-wish" name="wish" rows="4" maxlength="1000" required placeholder="Mí bà muốn có thêm merch gì hay có góp ý gì thì cho tụi tui bít với nhen" aria-describedby="wish-status"></textarea><button class="primary" type="submit">Gửi ý kiến ♡</button><p id="wish-status" role="status" aria-live="polite"></p></form></section>
+<section class="section suggestions" aria-labelledby="suggestion-title"><h2 id="suggestion-title">ĐÓNG GÓP Ý KIẾN</h2><form id="suggestion-form"><div id="feedback-phone-field"><label for="feedback-phone">Số điện thoại/email</label><input id="feedback-phone" type="text" autocomplete="username" inputmode="text" maxlength="254" placeholder="Số điện thoại/email" aria-describedby="wish-status"></div><label for="merch-wish">Ý kiến của bạn</label><textarea id="merch-wish" name="wish" rows="4" maxlength="1000" required placeholder="Mí bà muốn có thêm merch gì hay có góp ý gì thì cho tụi tui bít với nhen" aria-describedby="wish-status"></textarea><button class="primary" type="submit">Gửi ý kiến ♡</button><p id="wish-status" role="status" aria-live="polite"></p></form></section>
 </main>
 <details class="sample-settings" id="demo-banner" hidden><summary aria-label="Cài đặt ảnh mẫu">⚙</summary><div class="sample-controls"><label>Ảnh logo<input type="file" id="logo-upload" accept="image/png,image/jpeg,image/webp"></label><label>Ảnh merch<input type="file" id="upload" accept="image/png,image/jpeg,image/webp"></label><button id="download-demo" type="button">Tải bản mẫu</button><small>Bản mẫu · phiếu chỉ lưu trên thiết bị này</small></div></details>
 <dialog id="phone-dialog" aria-label="Tài khoản bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Số điện thoại/email</label><input id="phone" type="text" inputmode="text" autocomplete="username" placeholder="Số điện thoại/email" required maxlength="254" aria-describedby="phone-error" aria-label="Email hoặc số điện thoại"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Bình chọn</button><button type="button" class="forget">Đăng xuất</button></form></dialog><div id="toast" role="status"></div>`;
@@ -141,17 +141,16 @@ render();refresh().catch(()=>{toast('Chưa kết nối dữ liệu bình chọn.
 let wishRequest = null;
 function syncFeedbackPhone() {
  const input = document.querySelector('#feedback-phone');
- const hasPhone=account?.type==='phone';
- input.required = !hasPhone; input.disabled = hasPhone;
- document.querySelector('#feedback-phone-field').hidden = hasPhone;
+ input.required = !account; input.disabled = !!account;
+ document.querySelector('#feedback-phone-field').hidden = !!account;
 }
 document.querySelector('#suggestion-form').addEventListener('submit', async event => {
  event.preventDefault();
  const form = event.currentTarget, input = form.querySelector('textarea'), submit = form.querySelector('button[type="submit"]');
  const status = document.querySelector('#wish-status'), wish = input.value.trim();
  if (submit.disabled) return;
- const feedbackAccount = account?.type==='phone' ? account : normalizeIdentity({phone:document.querySelector('#feedback-phone').value});
- if (!feedbackAccount) { status.textContent = 'Số điện thoại chưa hợp lệ.'; document.querySelector('#feedback-phone').focus(); return; }
+ const feedbackAccount = account || parseContact(document.querySelector('#feedback-phone').value);
+ if (!feedbackAccount) { status.textContent = 'Thông tin chưa hợp lệ.'; document.querySelector('#feedback-phone').focus(); return; }
  if (!wish) { status.textContent = 'Bạn điền ý kiến trước nhé.'; input.focus(); return; }
  if (demo) { status.textContent = 'Đây là bản mẫu. Ý kiến chưa được gửi.'; return; }
  if (!wishRequest || wishRequest.wish !== wish || wishRequest.contactKey !== identityHashInput(feedbackAccount)) wishRequest = {wish, ...identityPayload(feedbackAccount), contactKey:identityHashInput(feedbackAccount), requestId:crypto.randomUUID()};
