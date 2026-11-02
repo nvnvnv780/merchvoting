@@ -7,9 +7,9 @@ test('48 images remain in voting ID order with the replacement at 41', () => {
  assert.equal(merchImages.length,48);
  assert.equal(maxMerchCount,48);
  for(let i=0;i<48;i++){
-  assert.equal(merchImages[i],i===40 ? '/merch/41.jpeg' : `/merch/${i+1}.webp`);
+  assert.equal(merchImages[i],i===40 ? '/merch/41-cats.png' : `/merch/${i+1}.webp`);
   const bytes=fs.readFileSync(new URL(`../public${merchImages[i]}`,import.meta.url));
-  if(i===40) assert.equal(bytes.toString('hex',0,2),'ffd8');
+  if(i===40) assert.equal(bytes.toString('hex',0,8),'89504e470d0a1a0a');
   else {assert.equal(bytes.toString('ascii',0,4),'RIFF');assert.equal(bytes.toString('ascii',8,12),'WEBP');}
  }
 });

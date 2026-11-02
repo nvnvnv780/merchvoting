@@ -8,7 +8,7 @@ Use the existing checkout; Node 22+ recommended. Run `npm ci --include=optional`
 
 ## Original images and campaign
 
-The original 48 WebP files from the supplied archive are included as `public/merch/1.webp` through `48.webp`. Voting ID 41 now uses the replacement original JPEG at `public/merch/41.jpeg`; all other IDs keep the numbered WebP images. Source and build images are byte-for-byte identical to the upload; no cropping, recompression, or color filters are applied. Product names remain inside the supplied artwork only. The top-three ranking uses the same image as its merch card.
+The original 48 WebP files from the supplied archive are included as `public/merch/1.webp` through `48.webp`. Voting ID 41 now uses the replacement original PNG at `public/merch/41-cats.png`; all other IDs keep the numbered WebP images. Source and build images are byte-for-byte identical to the upload; no cropping, recompression, or color filters are applied. Product names remain inside the supplied artwork only. The top-three ranking uses the same image as its merch card.
 
 `src/catalog.js` defines the 48-image catalog and campaign ID. This campaign has a separate browser sample-vote namespace so votes for the old 12-image preview are not attributed to different products. Keep the catalog order stable once a real campaign opens.
 
