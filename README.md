@@ -51,3 +51,7 @@ New destination: https://docs.google.com/spreadsheets/d/1ONK0DZdlQOWWJeK-mU2VB2L
 5. Submit a controlled suggestion through the deployed page and verify exactly one row appears; retry the same request ID and verify no duplicate. No production end-to-end check has been completed yet.
 
 The chat's Google Drive connection can create the spreadsheet but does not deploy Apps Script or grant the live Cloudflare site ongoing Google access. The web app deployment above is required.
+
+## Duplicate removed
+
+Original voting ID 46 is retired. The public catalog and ranking show 47 items; original images 47 and 48 now occupy display positions 46 and 47. Their voting IDs, image files and existing votes stay unchanged. The API rejects new votes for retired ID 46 and omits it from counts and phone status. Historic database rows are retained without reassigning them.

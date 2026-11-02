@@ -10,7 +10,7 @@ import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/montserrat/latin-800.css';
 import './style.css';
 import { normalizePhone } from './phone.js';
-import { merchImages, maxMerchCount, campaignId } from './catalog.js';
+import { merchImages, maxMerchCount, campaignId, visibleMerchIds } from './catalog.js';
 import { sortMerch } from './sort.js';
 const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
@@ -50,7 +50,7 @@ window.addEventListener('pagehide', e => { if (!e.persisted) { imageUrls.forEach
 function imageMarkup(id) { const image = photo || photos[id - 1]; return image ? `<img src="${displayImage(image)}" alt="Merch ${id}" loading="lazy" decoding="async" width="1500" height="1500">` : '<span class="image-empty" aria-label="Chờ ảnh merch gốc">＋</span>'; }
 function button(id) { return `<button class="vote ${voted.includes(id) ? 'done' : ''}" data-vote="${id}" ${connecting || busy || voted.includes(id) ? 'disabled' : ''}>${voted.includes(id) ? '✓ Đã bình chọn' : !ready ? (connecting ? 'Đang kết nối…' : 'Thử lại bình chọn') : '♡ Bình chọn ngay'}</button>`; }
 function render() {
- const ranked = sortMerch(counts.map((count, i) => ({ id: i + 1, count })), 'desc');
+ const ranked = sortMerch(counts.map((count, i) => ({ id: i + 1, count })).filter(item => visibleMerchIds.includes(item.id)), 'desc');
  document.querySelector('#hero-logo').innerHTML = logo ? `<img src="${logo}" alt="Logo Túc Tắc">` : '<button class="logo-empty" type="button" aria-label="Chọn file logo gốc">＋</button>';
  document.querySelector('.logo-empty')?.addEventListener('click', () => document.querySelector('#logo-upload').click());
  document.querySelector('#podium').innerHTML = [1,0,2].map(index => { const m = ranked[index]; return `<article class="podium-card place-${index+1}"><div class="place-label">TOP ${index+1}</div><div class="podium-image">${imageMarkup(m.id)}<span class="rank-medal">${index+1}</span></div><div class="podium-info"><strong>${format(m.count)}</strong><span>lượt bình chọn</span>${button(m.id)}</div></article>`; }).join('');
