@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import fs from 'node:fs';
+import {attachBatch} from './support/d1-batch.js';
 import {onRequest} from '../functions/api/votes.js';
 
 test('new merch stores and deduplicates votes with real SQLite without altering historic rows',async()=>{
@@ -19,6 +20,7 @@ test('new merch stores and deduplicates votes with real SQLite without altering 
  db.prepare('INSERT INTO votes (phone_hash,merch_id) VALUES (?,?)').run('retired-fixture',46);
  const before=JSON.stringify(db.prepare('SELECT * FROM votes ORDER BY phone_hash,merch_id').all());
  const env={PHONE_HASH_SECRET:secret,DB:{prepare(sql){let args=[];return {bind(...values){args=values;return this;},async all(){return {results:db.prepare(sql).all(...args).map(row=>({...row}))};},async run(){return {meta:{changes:Number(db.prepare(sql).run(...args).changes)}};}};}}};
+ attachBatch(db,env.DB);
  const post=(contact,id=49,action)=>new Request('https://example.test/api/votes',{method:'POST',headers:{Origin:'https://example.test','Content-Type':'application/json'},body:JSON.stringify({...contact,id,...(action?{action}:{})})});
  assert.deepEqual(await (await onRequest({request:post({phone:'+84 912 345 678'}),env})).json(),{duplicate:false});
  assert.deepEqual(await (await onRequest({request:post({phone:'0912345678'}),env})).json(),{duplicate:true});
@@ -42,7 +44,9 @@ test('first GET initializes the extra table and leaves legacy data intact',async
  try{
  db.exec('CREATE TABLE votes (phone_hash TEXT,merch_id INTEGER); INSERT INTO votes VALUES (\'old\',47)');
  const env={PHONE_HASH_SECRET:'test',DB:{prepare(sql){return {async all(){return {results:db.prepare(sql).all().map(r=>({...r}))};},async run(){db.exec(sql);return {meta:{changes:0}};}};}}};
- assert.deepEqual(await (await onRequest({request:new Request('https://example.test/api/votes'),env})).json(),{counts:[{id:47,count:1}]});
+ attachBatch(db,env.DB);
+ const data=await (await onRequest({request:new Request('https://example.test/api/votes'),env})).json();
+ assert.deepEqual(data.counts,[{id:47,count:1}]);assert.equal(data.stale,false);
  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='additional_votes'").get().n,1);
  } finally {db.close();}
 });

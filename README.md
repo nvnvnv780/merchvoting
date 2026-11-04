@@ -73,3 +73,9 @@ The original D1 table limits IDs to 48. New votes use the idempotent `0003_addit
 Production account saves and all vote/status POST requests enforce a maximum of three changes per persistent HttpOnly device cookie. The first account initializes the record for free; normalized identical contacts do not count. Logging out only clears local account selection. An atomic conditional UPSERT in D1 prevents concurrent requests from exceeding three changes. Migration 0004 is bootstrapped on a missing-table error without changing vote rows or hashes. Existing saved contacts become the initial account when first loaded after deployment. The limit starts with this deployment; previous changes were not recorded.
 
 This identifies a browser profile, not physical hardware: clearing cookies, another browser or private browsing creates a new identity. No hardware fingerprinting is used.
+
+## D1 read-limit recovery
+
+A production diagnostic confirmed the free-tier daily row-read limit was exceeded. Existing vote rows remain in D1. The GET API serves a marked last-known public snapshot with voting unavailable while reads are blocked; the frontend preserves counts instead of displaying fabricated zeros. The bundled snapshot is the latest verified API response from the incident, not a replacement for database rows.
+
+After D1 access resumes, an atomic bootstrap creates `vote_totals` and insert/delete triggers for both vote tables, backfills once, then reads at most one count row per merch. Regional caching shares fresh results for ten seconds; successful vote writes invalidate the local fresh cache. A stale-cache fallback retains its capture timestamp and explicitly disables voting until a live read succeeds. The free-tier restriction itself requires a paid plan or the daily quota reset.

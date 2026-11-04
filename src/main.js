@@ -9,6 +9,7 @@ import '@fontsource/montserrat/latin-600.css';
 import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/montserrat/latin-800.css';
 import './style.css';
+import { parseCounts } from './counts.js';
 import { normalizeIdentity, identityPayload, identityHashInput, parseContact } from './identity.js';
 import { merchImages, maxMerchCount, campaignId, visibleMerchIds } from './catalog.js';
 import { sortMerch } from './sort.js';
@@ -20,6 +21,8 @@ const demoVotesKey = `tuctac-demo-votes-${campaignId}`;
 let demoVotes = read(demoVotesKey, {});
 let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, connecting = true, pending = null, busy = false;
 let photos = [...merchImages];
+let hasCounts=false, connectionMessage='', refreshRetryTimer, refreshRetryAttempts=0;
+const countsCacheKey=`tuctac-counts-${campaignId}`;
 let sortOrder = 'default';
 let photo = '';
 let logo = read('tuctac-logo-image', '') || '/logo.jpeg';
@@ -35,7 +38,7 @@ app.innerHTML = `
 <details class="sample-settings" id="demo-banner" hidden><summary aria-label="Cài đặt ảnh mẫu">⚙</summary><div class="sample-controls"><label>Ảnh logo<input type="file" id="logo-upload" accept="image/png,image/jpeg,image/webp"></label><label>Ảnh merch<input type="file" id="upload" accept="image/png,image/jpeg,image/webp"></label><button id="download-demo" type="button">Tải bản mẫu</button><small>Bản mẫu · phiếu chỉ lưu trên thiết bị này</small></div></details>
 <dialog id="phone-dialog" aria-label="Tài khoản bình chọn"><form id="phone-form"><button type="button" class="close" aria-label="Đóng">×</button><label for="phone">Điện thoại/Email</label><input id="phone" type="text" inputmode="text" autocomplete="username" placeholder="Điện thoại/Email" required maxlength="254" aria-describedby="phone-error" aria-label="Điện thoại/Email"><p id="phone-error" role="alert"></p><button class="primary submit" type="submit">Bình chọn</button><button type="button" class="forget">Đăng xuất</button></form></dialog><div id="toast" role="status"></div>`;
 const dialog = document.querySelector('dialog');
-const format = n => new Intl.NumberFormat('vi-VN').format(n);
+const format = n => n==null?'—':new Intl.NumberFormat('vi-VN').format(n);
 const imageUrls = new Map();
 function displayImage(image) {
  if (!image?.startsWith('data:image/') || !URL.createObjectURL) return image;
@@ -60,23 +63,40 @@ function render() {
  syncFeedbackPhone();
  document.querySelector('#identity').hidden = !account;
  document.querySelector('#demo-banner').hidden = !demo;
- document.querySelector('#voting-status').hidden = demo || connecting || ready;
+ document.querySelector('#podium').hidden = !demo && !hasCounts;
+ const status=document.querySelector('#voting-status');status.textContent=connectionMessage || (connecting?'Đang tải kết quả…':'');status.hidden=demo || !status.textContent;
 
 }
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),4000); }
-async function api(body) { const res=await fetch('/api/votes',body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}); const data=await res.json(); if(!res.ok) {const error=new Error(data.error || 'Chưa kết nối được hệ thống.');error.status=res.status;throw error;} return data; }
+async function api(body) { const res=await fetch('/api/votes',body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)} : {cache:'no-store',signal:AbortSignal.timeout(15000)}); const data=await res.json().catch(()=>({error:'Kết nối tạm thời gián đoạn.'})); if(!res.ok) {const error=new Error(data.error || 'Chưa kết nối được hệ thống.');error.status=res.status;throw error;} return data; }
 async function refresh() {
- connecting=true; render();
+ connecting=true;render();
  try {
- if(demo) { counts=Array.from({length:photos.length},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length); voted=demoVotes[accountKey()] || []; ready=true; }
- else { const data=await api(); counts=Array.from({length:photos.length},(_,i)=>data.counts.find(m=>m.id===i+1)?.count || 0); voted=account ? (await api({...identityPayload(account),id:1,action:'status'})).voted : []; ready=true; }
- } catch(error) { ready=false; throw error; }
- finally { connecting=false; render(); }
+  if(demo){counts=Array.from({length:photos.length},(_,i)=>Object.values(demoVotes).filter(ids=>ids.includes(i+1)).length);voted=demoVotes[accountKey()]||[];ready=true;hasCounts=true;}
+  else {
+   const data=await api();counts=parseCounts(data,photos.length);hasCounts=true;
+   save(countsCacheKey,{counts:data.counts});
+   if(data.stale||data.voting_available===false){ready=false;connectionMessage='Đang hiển thị kết quả gần nhất. Bình chọn tạm thời gián đoạn.';return false;}
+   if(account){
+    try{voted=(await api({...identityPayload(account),id:1,action:'status'})).voted;}
+    catch(error){
+     if(![409,429].includes(error.status))throw error;
+     account=null;voted=[];save('tuctac-account',null);save('tuctac-phone','');toast(error.message);
+    }
+   }
+   ready=true;
+  }
+  connectionMessage='';refreshRetryAttempts=0;clearTimeout(refreshRetryTimer);return true;
+ } catch(error) {
+  ready=false;connectionMessage=hasCounts?'Đang hiển thị kết quả gần nhất. Chạm “Thử lại bình chọn” để kết nối lại.':'Chưa tải được kết quả. Chạm “Thử lại bình chọn” để kết nối lại.';
+  if(refreshRetryAttempts<3){const delay=[2000,5000,10000][refreshRetryAttempts++];clearTimeout(refreshRetryTimer);refreshRetryTimer=setTimeout(()=>refresh().catch(()=>{}),delay);}
+  throw error;
+ } finally {connecting=false;render();}
 }
 async function vote(id) {
  if(busy || connecting) return;
  if(!ready) {
-  try { await refresh(); }
+  try { if(!await refresh()){toast('Bình chọn tạm thời gián đoạn. Bạn thử lại sau nhé.');return;} }
   catch { toast('Chưa kết nối được hệ thống. Phiếu chưa được gửi. Bạn thử lại sau nhé.'); return; }
  }
  if(!account) { pending=id; document.querySelector('.submit').textContent='Bình chọn'; document.querySelector('#phone-error').textContent=''; dialog.showModal(); return; }
@@ -102,7 +122,7 @@ document.querySelector('#phone-form').onsubmit=async e=>{
  if(!normalized){document.querySelector('#phone-error').textContent='Thông tin chưa hợp lệ.';return;}
  const submit=document.querySelector('.submit');if(submit.disabled)return;submit.disabled=true;
  try {
- if(!demo){const response=await fetch('/api/account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(identityPayload(normalized))});const result=await response.json();if(!response.ok)throw new Error(result.error||'Chưa đổi được tài khoản.');}
+ if(!demo){const response=await fetch('/api/account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(identityPayload(normalized))});const result=await response.json().catch(()=>({error:'Kết nối tạm thời gián đoạn.'}));if(!response.ok)throw new Error(result.error||'Chưa đổi được tài khoản.');}
  account=normalized;save('tuctac-account',identityPayload(account));save('tuctac-phone',account.type==='phone'?account.value:'');
  dialog.close();const id=pending;pending=null;if(id)await vote(id);else try{await refresh();}catch(error){toast([409,429].includes(error.status)?error.message:'Chưa tải được bình chọn.');}
  }catch(error){document.querySelector('#phone-error').textContent=error.message||'Chưa đổi được tài khoản.';}
@@ -139,7 +159,8 @@ if(window.__TUCTAC_ASSETS__) {
  photo=window.__TUCTAC_ASSETS__.photo || photo;
  if(Array.isArray(window.__TUCTAC_ASSETS__.photos) && window.__TUCTAC_ASSETS__.photos.length > 0 && window.__TUCTAC_ASSETS__.photos.length <= maxMerchCount) photos=window.__TUCTAC_ASSETS__.photos;
 }
-counts = Array(photos.length).fill(0);
+counts = Array(photos.length).fill(null);
+if(!demo){try{const cached=read(countsCacheKey,null);if(cached){counts=parseCounts(cached,photos.length);hasCounts=true;connectionMessage='Đang cập nhật kết quả…';}}catch{}}
 document.querySelector('#sort-order').onchange = e => { sortOrder=e.target.value;render(); };
 render();refresh().catch(()=>{toast('Chưa kết nối dữ liệu bình chọn. Vui lòng thử lại sau.');});
 

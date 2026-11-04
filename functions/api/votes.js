@@ -1,3 +1,5 @@
+import { readVoteCounts, isReadLimit } from '../_shared/vote-counts.js';
+import { lastKnownCounts } from '../../src/last-known-counts.js';
 import { hashIdentity, registerDeviceAccount, deviceHeaders, limitMessage, accountChangedMessage } from '../_shared/device-account.js';
 import { normalizeIdentity } from '../../src/identity.js';
 import { visibleMerchIds } from '../../src/catalog.js';
@@ -17,16 +19,26 @@ async function withAdditionalVotes(env, query) {
     return await query();
   }
 }
-export async function onRequest({ request, env }) {
-  if (!env.DB || !env.PHONE_HASH_SECRET) return json({ error: 'Chưa kết nối hệ thống bình chọn.', demo: env.DEMO_MODE === 'true' }, 503);
+async function handleRequest({ request, env }) {
   if (request.method === 'GET') {
+    const cache=globalThis.caches?.default;
+    const cacheBase=new URL('/api/votes-counts-cache-v1',request.url).href;
+    const cached=async suffix=>{try{return await (await cache?.match(cacheBase+suffix))?.json();}catch{return null;}};
+    const put=async(suffix,data,seconds)=>{try{await cache?.put(cacheBase+suffix,Response.json(data,{headers:{'Cache-Control':`public, max-age=${seconds}`}}));}catch{}};
+    const fresh=await cached('-fresh');if(fresh?.counts)return json(fresh);
     try {
-      const { results } = await withAdditionalVotes(env, () => env.DB.prepare('SELECT merch_id AS id, COUNT(*) AS count FROM (SELECT merch_id FROM votes UNION ALL SELECT merch_id FROM additional_votes) GROUP BY merch_id').all());
-      return json({ counts: results.filter(row => visibleMerchIds.includes(row.id)) });
-    } catch (error) {
-      return json({error:'Chưa tải được kết quả bình chọn. Vui lòng thử lại.',code:'VOTES_READ_FAILED',diagnostic:{message:String(error?.message||error),cause:String(error?.cause?.message||'')}},503);
+      if(!env.DB)throw new Error('Database unavailable');
+      const counts=(await readVoteCounts(env.DB)).filter(row=>visibleMerchIds.includes(row.id));
+      const data={counts,stale:false,voting_available:true,captured_at:new Date().toISOString()};
+      await Promise.all([put('-fresh',data,10),put('-last-good',data,86400)]);
+      return json(data);
+    } catch(error) {
+      const snapshot=await cached('-last-good')||lastKnownCounts;
+      const data={...snapshot,stale:true,voting_available:false,reason:isReadLimit(error)?'D1_READ_LIMIT':'CONNECTION_UNAVAILABLE',error:'Đang hiển thị kết quả gần nhất. Bình chọn tạm thời gián đoạn.'};
+      await put('-fresh',data,10);return json(data);
     }
   }
+  if (!env.DB || !env.PHONE_HASH_SECRET) return json({ error: 'Chưa kết nối hệ thống bình chọn.', demo: env.DEMO_MODE === 'true' }, 503);
   if (request.method !== 'POST') return json({ error: 'Phương thức không hỗ trợ.' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin) return json({ error: 'Yêu cầu không hợp lệ.' }, 403);
   let body;
@@ -42,5 +54,11 @@ export async function onRequest({ request, env }) {
   }
   const insert = () => env.DB.prepare(`INSERT INTO ${body.id >= 49 ? 'additional_votes' : 'votes'} (phone_hash, merch_id) VALUES (?, ?) ON CONFLICT DO NOTHING`).bind(hash, body.id).run();
   const result = body.id >= 49 ? await withAdditionalVotes(env, insert) : await insert();
+  if(result.meta.changes){try{await globalThis.caches?.default?.delete(new URL('/api/votes-counts-cache-v1-fresh',request.url).href);}catch{}}
   return json({ duplicate: result.meta.changes === 0 },200,deviceHeaders(device));
+}
+
+export async function onRequest(context){
+ try{return await handleRequest(context);}
+ catch(error){return json({error:'Bình chọn tạm thời gián đoạn. Bạn thử lại sau nhé.',reason:isReadLimit(error)?'D1_READ_LIMIT':'CONNECTION_UNAVAILABLE'},503);}
 }

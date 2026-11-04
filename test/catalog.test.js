@@ -29,7 +29,7 @@ test('removes duplicate 46 while keeping original vote identities for 47 and 48'
  assert.equal(merchImages[visibleMerchIds[46]-1],'/merch/48.webp');
 });
 test('counts and saved votes exclude retired 46 without changing 47 and 48', async () => {
- const env={PHONE_HASH_SECRET:'test-fixture-only-not-a-real-secret',DB:{prepare(sql){return {bind(){return this;},async all(){return {results:sql.includes('GROUP BY') ? [{id:46,count:99},{id:47,count:7},{id:48,count:8}] : [{merch_id:46},{merch_id:47},{merch_id:48}]};}};}}};
+ const env={PHONE_HASH_SECRET:'test-fixture-only-not-a-real-secret',DB:{prepare(sql){return {bind(){return this;},async all(){return {results:sql.includes('FROM vote_totals') ? [{id:0,count:0},{id:46,count:99},{id:47,count:7},{id:48,count:8}] : [{merch_id:46},{merch_id:47},{merch_id:48}]};}};}}};
  const counts=await onRequest({request:new Request('https://example.test/api/votes'),env});
  assert.deepEqual((await counts.json()).counts,[{id:47,count:7},{id:48,count:8}]);
  const status=await onRequest({request:new Request('https://example.test/api/votes',{method:'POST',headers:{Origin:'https://example.test','Content-Type':'application/json'},body:JSON.stringify({phone:'0912345678',id:1,action:'status'})}),env});
