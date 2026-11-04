@@ -67,3 +67,9 @@ Feedback uses the same phone/email contact as voting and hides the contact input
 The original supplied PNG is `public/merch/49-cup-keychain.png`, appended as voting ID 49. There are now 48 visible cards; retired duplicate 46 stays hidden. IDs, images and votes for every existing item are unchanged.
 
 The original D1 table limits IDs to 48. New votes use the idempotent `0003_additional_votes.sql` table, and the API unions counts/status across both tables. The API creates this table automatically only on a missing-table error so existing Pages deployments do not require dashboard changes. No existing vote rows or tables are modified.
+
+## Three account changes per browser
+
+Production account saves and all vote/status POST requests enforce a maximum of three changes per persistent HttpOnly device cookie. The first account initializes the record for free; normalized identical contacts do not count. Logging out only clears local account selection. An atomic conditional UPSERT in D1 prevents concurrent requests from exceeding three changes. Migration 0004 is bootstrapped on a missing-table error without changing vote rows or hashes. Existing saved contacts become the initial account when first loaded after deployment. The limit starts with this deployment; previous changes were not recorded.
+
+This identifies a browser profile, not physical hardware: clearing cookies, another browser or private browsing creates a new identity. No hardware fingerprinting is used.

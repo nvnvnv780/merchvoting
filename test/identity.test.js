@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeEmail,normalizeIdentity,identityHashInput,parseContact} from '../src/identity.js';
-import {onRequest} from '../functions/api/votes.js';
+import {onRequest} from './support/legacy-votes.js';
 test('normalizes contacts and rejects invalid or ambiguous identities',()=>{
  assert.equal(normalizeEmail('  Fan+Merch@Example.COM '),'fan+merch@example.com');
  for(const email of ['bad','a@@example.com','a@b','a..b@example.com','.a@example.com','a.@example.com','a b@example.com','a@-example.com','x'.repeat(65)+'@example.com']) assert.equal(normalizeEmail(email),null);

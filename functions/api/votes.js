@@ -1,6 +1,7 @@
-import { normalizeIdentity, identityHashInput } from '../../src/identity.js';
+import { hashIdentity, registerDeviceAccount, deviceHeaders, limitMessage, accountChangedMessage } from '../_shared/device-account.js';
+import { normalizeIdentity } from '../../src/identity.js';
 import { visibleMerchIds } from '../../src/catalog.js';
-const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
+const json = (body, status = 200, headers = {}) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
 // Bootstrap only if an older database has not applied migration 0003 yet.
 // The existing votes table and all historical votes remain untouched.
 async function withAdditionalVotes(env, query) {
@@ -28,13 +29,14 @@ export async function onRequest({ request, env }) {
   try { body = await request.json(); } catch { return json({ error: 'Dữ liệu không hợp lệ.' }, 400); }
   const identity = normalizeIdentity(body);
   if (!identity || !Number.isInteger(body.id) || !visibleMerchIds.includes(body.id)) return json({ error: 'Điện thoại/Email chưa hợp lệ.' }, 400);
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.PHONE_HASH_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const hash = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(identityHashInput(identity)))), b => b.toString(16).padStart(2, '0')).join('');
+  const hash = await hashIdentity(identity, env);
+  const device = await registerDeviceAccount(request, env, hash);
+  if (!device.allowed) return json({error:device.changes>=3?limitMessage:accountChangedMessage},device.changes>=3?429:409,deviceHeaders(device));
   if (body.action === 'status') {
     const { results } = await withAdditionalVotes(env, () => env.DB.prepare('SELECT merch_id FROM votes WHERE phone_hash = ? UNION ALL SELECT merch_id FROM additional_votes WHERE phone_hash = ?').bind(hash, hash).all());
-    return json({ voted: results.map(row => row.merch_id).filter(id => visibleMerchIds.includes(id)) });
+    return json({ voted: results.map(row => row.merch_id).filter(id => visibleMerchIds.includes(id)) },200,deviceHeaders(device));
   }
   const insert = () => env.DB.prepare(`INSERT INTO ${body.id >= 49 ? 'additional_votes' : 'votes'} (phone_hash, merch_id) VALUES (?, ?) ON CONFLICT DO NOTHING`).bind(hash, body.id).run();
   const result = body.id >= 49 ? await withAdditionalVotes(env, insert) : await insert();
-  return json({ duplicate: result.meta.changes === 0 });
+  return json({ duplicate: result.meta.changes === 0 },200,deviceHeaders(device));
 }

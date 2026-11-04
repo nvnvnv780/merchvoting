@@ -64,7 +64,7 @@ function render() {
 
 }
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),4000); }
-async function api(body) { const res=await fetch('/api/votes',body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}); const data=await res.json(); if(!res.ok) throw new Error(data.error || 'Chưa kết nối được hệ thống.'); return data; }
+async function api(body) { const res=await fetch('/api/votes',body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}); const data=await res.json(); if(!res.ok) {const error=new Error(data.error || 'Chưa kết nối được hệ thống.');error.status=res.status;throw error;} return data; }
 async function refresh() {
  connecting=true; render();
  try {
@@ -86,7 +86,7 @@ async function vote(id) {
   if(demo) { const ids=demoVotes[accountKey()] || []; duplicate=ids.includes(id); if(!duplicate) { demoVotes[accountKey()]=[...ids,id]; save(demoVotesKey,demoVotes); } }
   else duplicate=(await api({...identityPayload(account),id})).duplicate;
   await refresh(); toast(duplicate ? 'Tài khoản này đã bình chọn rồi.' : 'Đã gửi một phiếu yêu thương. Cảm ơn bạn! ♡');
- } catch { toast('Chưa gửi được phiếu. Bạn thử lại sau nhé.'); }
+ } catch(error) { toast([409,429].includes(error.status)?error.message:'Chưa gửi được phiếu. Bạn thử lại sau nhé.'); }
  finally { busy=false; render(); }
 }
 app.addEventListener('click',e=>{const b=e.target.closest('[data-vote]'); if(b) vote(Number(b.dataset.vote));});
@@ -100,8 +100,13 @@ document.querySelector('#phone-form').onsubmit=async e=>{
  e.preventDefault();
  const normalized=parseContact(document.querySelector('#phone').value);
  if(!normalized){document.querySelector('#phone-error').textContent='Thông tin chưa hợp lệ.';return;}
+ const submit=document.querySelector('.submit');if(submit.disabled)return;submit.disabled=true;
+ try {
+ if(!demo){const response=await fetch('/api/account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(identityPayload(normalized))});const result=await response.json();if(!response.ok)throw new Error(result.error||'Chưa đổi được tài khoản.');}
  account=normalized;save('tuctac-account',identityPayload(account));save('tuctac-phone',account.type==='phone'?account.value:'');
- dialog.close();const id=pending;pending=null;if(id)await vote(id);else try{await refresh();}catch{toast('Chưa tải được bình chọn.');}
+ dialog.close();const id=pending;pending=null;if(id)await vote(id);else try{await refresh();}catch(error){toast([409,429].includes(error.status)?error.message:'Chưa tải được bình chọn.');}
+ }catch(error){document.querySelector('#phone-error').textContent=error.message||'Chưa đổi được tài khoản.';}
+ finally{submit.disabled=false;}
 };
 function selectImage(input, type) {
  input.onchange = async e => {

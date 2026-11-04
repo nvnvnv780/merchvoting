@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { merchImages, maxMerchCount, visibleMerchIds } from '../src/catalog.js';
-import { onRequest } from '../functions/api/votes.js';
+import { onRequest } from './support/legacy-votes.js';
 test('49 image slots remain in voting ID order with the replacement at 41', () => {
  assert.equal(merchImages.length,49);
  assert.equal(maxMerchCount,49);
