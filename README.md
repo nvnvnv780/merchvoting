@@ -79,3 +79,7 @@ This identifies a browser profile, not physical hardware: clearing cookies, anot
 A production diagnostic confirmed the free-tier daily row-read limit was exceeded. Existing vote rows remain in D1. The GET API serves a marked last-known public snapshot with voting unavailable while reads are blocked; the frontend preserves counts instead of displaying fabricated zeros. The bundled snapshot is the latest verified API response from the incident, not a replacement for database rows.
 
 After D1 access resumes, an atomic bootstrap creates `vote_totals` and insert/delete triggers for both vote tables, backfills once, then reads at most one count row per merch. Regional caching shares fresh results for ten seconds; successful vote writes invalidate the local fresh cache. A stale-cache fallback retains its capture timestamp and explicitly disables voting until a live read succeeds. The free-tier restriction itself requires a paid plan or the daily quota reset.
+
+## Scheduled availability check
+
+During the current quota outage, the banner says Hệ thống bình chọn xin được tạm dừng đến lúc 7:00 ngày 5/11. This is 2026-11-05 00:00 UTC. Open pages schedule a fresh API read at that time, then retry every 30 seconds if the service is still unavailable. Returning to a visible/focused tab also rechecks after the scheduled time. A successful live API read clears the pause and enables voting; this does not claim that Cloudflare's quota reset itself is controlled by the site.

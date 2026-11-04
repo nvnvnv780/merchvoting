@@ -1,3 +1,4 @@
+import { unavailableMessage } from '../../src/availability.js';
 import { readVoteCounts, isReadLimit } from '../_shared/vote-counts.js';
 import { lastKnownCounts } from '../../src/last-known-counts.js';
 import { hashIdentity, registerDeviceAccount, deviceHeaders, limitMessage, accountChangedMessage } from '../_shared/device-account.js';
@@ -34,7 +35,7 @@ async function handleRequest({ request, env }) {
       return json(data);
     } catch(error) {
       const snapshot=await cached('-last-good')||lastKnownCounts;
-      const data={...snapshot,stale:true,voting_available:false,reason:isReadLimit(error)?'D1_READ_LIMIT':'CONNECTION_UNAVAILABLE',error:'Đang hiển thị kết quả gần nhất. Bình chọn tạm thời gián đoạn.'};
+      const data={...snapshot,stale:true,voting_available:false,reason:isReadLimit(error)?'D1_READ_LIMIT':'CONNECTION_UNAVAILABLE',error:unavailableMessage()};
       await put('-fresh',data,10);return json(data);
     }
   }

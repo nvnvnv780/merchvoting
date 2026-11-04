@@ -10,6 +10,7 @@ import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/montserrat/latin-800.css';
 import './style.css';
 import { parseCounts } from './counts.js';
+import { VOTING_RESUMES_AT, VOTING_PAUSE_MESSAGE, unavailableMessage, availabilityRetryDelay } from './availability.js';
 import { normalizeIdentity, identityPayload, identityHashInput, parseContact } from './identity.js';
 import { merchImages, maxMerchCount, campaignId, visibleMerchIds } from './catalog.js';
 import { sortMerch } from './sort.js';
@@ -21,7 +22,7 @@ const demoVotesKey = `tuctac-demo-votes-${campaignId}`;
 let demoVotes = read(demoVotesKey, {});
 let counts = [], voted = [], demo = import.meta.env.DEV, ready = false, connecting = true, pending = null, busy = false;
 let photos = [...merchImages];
-let hasCounts=false, connectionMessage='', refreshRetryTimer, refreshRetryAttempts=0;
+let hasCounts=false, connectionMessage='', refreshRetryTimer, refreshRetryAttempts=0, availabilityRetryTimer;
 const countsCacheKey=`tuctac-counts-${campaignId}`;
 let sortOrder = 'default';
 let photo = '';
@@ -31,7 +32,7 @@ const app = document.querySelector('#app');
 app.innerHTML = `
 <main>
 <section class="hero"><div class="hero-logo" id="hero-logo"></div><h1>BÌNH CHỌN MERCH COMEBACK</h1></section>
-<section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><p id="voting-status" role="status" hidden>Chưa kết nối được hệ thống bình chọn. Chạm “Thử lại bình chọn” để kết nối lại. Phiếu chỉ được ghi nhận khi hệ thống xác nhận thành công.</p><div id="podium" class="podium"></div></section>
+<section id="ranking" class="ranking section"><h2>BẢNG XẾP HẠNG</h2><p id="voting-status" role="status" hidden>${VOTING_PAUSE_MESSAGE}</p><div id="podium" class="podium"></div></section>
 <section id="collection" class="collection section"><div class="collection-heading"><h2>BÌNH CHỌN MERCH</h2><button class="identity" id="identity"><span>Đổi tài khoản</span></button></div><div class="collection-tools"><label for="sort-order">Sắp xếp</label><select id="sort-order"><option value="default">Mặc định</option><option value="desc">Lượt bình chọn: cao đến thấp</option><option value="asc">Lượt bình chọn: thấp đến cao</option></select></div><div id="cards" class="cards"></div></section>
 <section class="section suggestions" aria-labelledby="suggestion-title"><h2 id="suggestion-title">ĐÓNG GÓP Ý KIẾN</h2><form id="suggestion-form"><div id="feedback-phone-field"><label for="feedback-phone">Điện thoại/Email</label><input id="feedback-phone" type="text" autocomplete="username" inputmode="text" maxlength="254" placeholder="Điện thoại/Email" aria-describedby="wish-status"></div><label for="merch-wish">Ý kiến của bạn</label><textarea id="merch-wish" name="wish" rows="4" maxlength="1000" required placeholder="Mí bà muốn có thêm merch gì hay có góp ý gì thì cho tụi tui bít với nhen" aria-describedby="wish-status"></textarea><button class="primary" type="submit">Gửi ý kiến ♡</button><p id="wish-status" role="status" aria-live="polite"></p></form></section>
 </main>
@@ -76,7 +77,7 @@ async function refresh() {
   else {
    const data=await api();counts=parseCounts(data,photos.length);hasCounts=true;
    save(countsCacheKey,{counts:data.counts});
-   if(data.stale||data.voting_available===false){ready=false;connectionMessage='Đang hiển thị kết quả gần nhất. Bình chọn tạm thời gián đoạn.';return false;}
+   if(data.stale||data.voting_available===false){ready=false;connectionMessage=unavailableMessage();scheduleAvailabilityCheck();return false;}
    if(account){
     try{voted=(await api({...identityPayload(account),id:1,action:'status'})).voted;}
     catch(error){
@@ -86,13 +87,28 @@ async function refresh() {
    }
    ready=true;
   }
-  connectionMessage='';refreshRetryAttempts=0;clearTimeout(refreshRetryTimer);return true;
+  connectionMessage='';refreshRetryAttempts=0;clearTimeout(refreshRetryTimer);clearTimeout(availabilityRetryTimer);return true;
  } catch(error) {
   ready=false;connectionMessage=hasCounts?'Đang hiển thị kết quả gần nhất. Chạm “Thử lại bình chọn” để kết nối lại.':'Chưa tải được kết quả. Chạm “Thử lại bình chọn” để kết nối lại.';
-  if(refreshRetryAttempts<3){const delay=[2000,5000,10000][refreshRetryAttempts++];clearTimeout(refreshRetryTimer);refreshRetryTimer=setTimeout(()=>refresh().catch(()=>{}),delay);}
+  if(Date.now()<VOTING_RESUMES_AT){connectionMessage=VOTING_PAUSE_MESSAGE;scheduleAvailabilityCheck();}
+  else if(refreshRetryAttempts<3){const delay=[2000,5000,10000][refreshRetryAttempts++];clearTimeout(refreshRetryTimer);refreshRetryTimer=setTimeout(()=>refresh().catch(()=>{}),delay);}
+  else scheduleAvailabilityCheck();
   throw error;
  } finally {connecting=false;render();}
 }
+function scheduleAvailabilityCheck() {
+ clearTimeout(availabilityRetryTimer);
+ availabilityRetryTimer=setTimeout(()=>{
+  if(connecting){scheduleAvailabilityCheck();return;}
+  refresh().catch(()=>{});
+ },availabilityRetryDelay());
+}
+function checkWhenVisible() {
+ if(!demo&&!ready&&!connecting&&Date.now()>=VOTING_RESUMES_AT)refresh().catch(()=>{});
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkWhenVisible();});
+window.addEventListener('focus',checkWhenVisible);
+window.addEventListener('pageshow',checkWhenVisible);
 async function vote(id) {
  if(busy || connecting) return;
  if(!ready) {
