@@ -20,8 +20,12 @@ async function withAdditionalVotes(env, query) {
 export async function onRequest({ request, env }) {
   if (!env.DB || !env.PHONE_HASH_SECRET) return json({ error: 'Chưa kết nối hệ thống bình chọn.', demo: env.DEMO_MODE === 'true' }, 503);
   if (request.method === 'GET') {
-    const { results } = await withAdditionalVotes(env, () => env.DB.prepare('SELECT merch_id AS id, COUNT(*) AS count FROM (SELECT merch_id FROM votes UNION ALL SELECT merch_id FROM additional_votes) GROUP BY merch_id').all());
-    return json({ counts: results.filter(row => visibleMerchIds.includes(row.id)) });
+    try {
+      const { results } = await withAdditionalVotes(env, () => env.DB.prepare('SELECT merch_id AS id, COUNT(*) AS count FROM (SELECT merch_id FROM votes UNION ALL SELECT merch_id FROM additional_votes) GROUP BY merch_id').all());
+      return json({ counts: results.filter(row => visibleMerchIds.includes(row.id)) });
+    } catch (error) {
+      return json({error:'Chưa tải được kết quả bình chọn. Vui lòng thử lại.',code:'VOTES_READ_FAILED',diagnostic:{message:String(error?.message||error),cause:String(error?.cause?.message||'')}},503);
+    }
   }
   if (request.method !== 'POST') return json({ error: 'Phương thức không hỗ trợ.' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin) return json({ error: 'Yêu cầu không hợp lệ.' }, 403);
